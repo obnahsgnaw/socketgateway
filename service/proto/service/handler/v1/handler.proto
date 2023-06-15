@@ -1,0 +1,28 @@
+syntax = "proto3";
+package handler.v1;
+
+// tcp socket server rpc service
+service HandlerService{
+  // handle action
+  rpc Handle(HandleRequest) returns (HandleResponse);
+}
+
+message HandleRequest {
+  uint32 action_id = 1;
+  bytes package = 2;
+  string gateway = 3;
+  int64 fd = 4;
+  string id = 5;  // bind id
+  string type = 6; // bind type
+  enum Format{
+    Proto = 0;
+    Json = 1;
+  }
+  Format format = 7;
+}
+
+message HandleResponse {
+  uint32 action_id = 1;
+  string action_name = 2;
+  bytes package = 3;
+}

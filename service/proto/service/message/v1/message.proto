@@ -1,0 +1,18 @@
+syntax = "proto3";
+package message.v1;
+
+// MessageService
+service MessageService{
+  // send message to client
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+}
+
+message SendMessageRequest{
+  int64 fd = 1;
+  string id = 2;
+  uint32 action_id = 3;
+  string action_name = 4;
+  bytes message = 5;
+}
+
+message SendMessageResponse{}

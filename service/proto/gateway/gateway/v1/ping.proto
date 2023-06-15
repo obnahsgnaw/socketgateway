@@ -1,0 +1,9 @@
+/*通信测试*/
+syntax = "proto3";
+package gateway.v1;
+
+// Ping
+message PingRequest{}
+
+// Pong
+message PongResponse{}
