@@ -1,0 +1,14 @@
+version: v1
+managed:
+  enabled: true
+  go_package_prefix:
+    default: github.com/obnahsgnaw/socketgateway/service/gen
+plugins:
+  # protoc-gen-go:go install google.golang.org/protobuf/cmd/protoc-gen-go
+  - plugin: go
+    out: ../gen
+    opt: paths=source_relative
+  # protoc-gen-go-grpc:go get google.golang.org/grpc/cmd/protoc-gen-go-grpc
+  - plugin: go-grpc
+    out: ../gen
+    opt: paths=source_relative

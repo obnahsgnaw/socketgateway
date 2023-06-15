@@ -1,0 +1,27 @@
+/*网关层认证*/
+syntax = "proto3";
+package gateway.v1;
+
+// 网关层认证的请求
+message AuthRequest{
+  string id = 1;      // 认证id
+  message Credential{
+    string secret = 1; // 密钥
+  }
+  bytes credential = 2; // 加密信息 序列化后进行rsa非对称加密
+}
+
+// 网关层认证的响应
+message AuthResponse{
+  enum Status{
+    Success = 0; // 成功
+    DataErr = 1; // data格式解析错误
+    IdNotFound = 2; // 认证id不存在
+    IdDisabled = 3; // 认证id不可用
+    IdLocked = 4; // 认证id已锁定
+    SecretFailed = 5; // 密钥错误
+    DecryptFailed = 6; // 解码错误
+  }
+  Status status = 1; // 状态码
+  bytes auth_data = 2; // 加密信息 GatewayAuthData 序列化后进行rsa非对称加密, secret为后续动作的对称加密密钥
+}

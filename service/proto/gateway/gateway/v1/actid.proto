@@ -1,0 +1,29 @@
+/*
+Socket协议网关层协议
+整体说明：
+1. 协议外层为 GatewayPackage
+1. 协议内层层为各个协议具体的结构数据
+2. 向网关层进行auth认证，得到相关的加解密密钥
+3. 向各个服务发起协议请求
+加解密说：
+1. 使用非对称加密(Rsa pkcs1.5 1024bit) 向网关层发起auth认证， 得到对称加密密钥
+2. 其他协议使用返回的对称密码进行对称加密（Aes 256 cbc pkcs7）
+3. PackageError 响应不进行加密
+*/
+syntax = "proto3";
+package gateway.v1;
+
+// 网关层的Action id
+enum ActionId{
+  None = 0;
+  PackageErr = 1; // 包解析错误
+  ActionErr = 2; // action id 解析失败 或者 <=0
+  InternalErr = 4; // 内部错误
+  NoActionHandler = 5; // 无处理服务 没有服务 或者不支持的action
+  DecryptErr = 6; // 解密错误
+  NoAuth = 7; // 未认证
+  Ping = 21; // ping 测试
+  Pong = 22; // pong 响应
+  AuthReq = 23; // 认证的请求
+  AuthResp = 24; // 认证的响应
+}

@@ -1,0 +1,15 @@
+/*网关层通用请求*/
+syntax = "proto3";
+package gateway.v1;
+
+// 网关层通用请求和响应的包， 所有协议包均需以此包结构构建
+message GatewayPackage {
+  uint32 action = 1; // 协议 id
+  bytes data = 2;       // 协议数据体
+  string iv = 3;        // 数据加解密时的iv值 无加密或不需iv则为空
+}
+
+// 网关层通用错误响应
+message GatewayErrResponse {
+  uint32 trigger_action = 1; // 出错的action id
+}

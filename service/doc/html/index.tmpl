@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Doc</title>
+</head>
+<body>
+   {{ $m := .module }}
+   {{ $prefix := .prefix }}
+    {{ range $k,$item := .gateway }}
+    <p><a href="{{ $prefix }}/docs/gateway/{{ $k }}">{{ $item.Title }}</a></p>
+    {{ end }}
+    {{ range $k,$item := .urls }}
+    <p><a href="{{ $prefix }}/docs/{{ $m }}/{{ $k }}">{{ $item.Title }}</a></p>
+    {{ end }}
+</body>
+</html>
