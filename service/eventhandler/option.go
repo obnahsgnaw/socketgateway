@@ -60,3 +60,9 @@ func CodecProvider(p codec.Provider) Option {
 		event.codecProvider = p
 	}
 }
+
+func CodedProvider(p codec.DataBuilderProvider) Option {
+	return func(event *Event) {
+		event.codedProvider = p
+	}
+}

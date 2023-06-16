@@ -22,8 +22,3 @@ func Gateway(host url.Host) Option {
 		s.gateway = host
 	}
 }
-func DbdProvider(provider codec.DataBuilderProvider) Option {
-	return func(s *Manager) {
-		s.dateBuilderProvider = provider
-	}
-}

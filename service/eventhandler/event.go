@@ -26,6 +26,7 @@ type Event struct {
 	logger        *zap.Logger
 	st            sockettype.SocketType
 	codecProvider codec.Provider
+	codedProvider codec.DataBuilderProvider
 	authEnable    bool
 	tickInterval  time.Duration
 	crypto        *security.EsCrypto
@@ -43,6 +44,7 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 	} else {
 		s.codecProvider = codec.DefaultProvider()
 	}
+	s.codedProvider = codec.NewDbp()
 	s.With(options...)
 	return s
 }
@@ -106,7 +108,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		gwPkg, err := e.getAction(pkgBuilder, packedPkg)
 		if err != nil {
 			e.log(c, "action parse failed, err="+err.Error(), zapcore.ErrorLevel)
-			if err = e.gatewayErrorResponse(c, coderName, gatewayv1.ActionId_ActionErr, 0); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_ActionErr, 0); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -114,7 +116,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		rqAction, ok := e.am.GetAction(codec.ActionId(gwPkg.Action))
 		if !ok {
 			e.log(c, "action no handler, action="+gwPkg.String(), zapcore.ErrorLevel, zap.Uint32("action", gwPkg.Action))
-			if err = e.gatewayErrorResponse(c, coderName, gatewayv1.ActionId_NoActionHandler, gwPkg.Action); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_NoActionHandler, gwPkg.Action); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -123,7 +125,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		// 4 认证检查， 排除认证相关action
 		if !e.authCheck(c, gatewayv1.ActionId(gwPkg.Action)) {
 			e.log(c, "no auth", zapcore.ErrorLevel)
-			if err = e.gatewayErrorResponse(c, coderName, gatewayv1.ActionId_NoAuth, gwPkg.Action); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_NoAuth, gwPkg.Action); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -132,24 +134,24 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		decryptedData, err := e.decrypt(c, gatewayv1.ActionId(gwPkg.Action), []byte(gwPkg.Iv), gwPkg.Data)
 		if err != nil {
 			e.log(c, "data decrypt failed, err="+err.Error(), zapcore.ErrorLevel)
-			if err = e.gatewayErrorResponse(c, coderName, gatewayv1.ActionId_DecryptErr, 0); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_DecryptErr, 0); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
 		}
 
 		// 6 分发action 获得响应信息
-		respAction, respData, err := e.am.Dispatch(c, coderName, codec.ActionId(gwPkg.Action), decryptedData)
+		respAction, respData, err := e.am.Dispatch(c, coderName, e.DataBuilder(c), codec.ActionId(gwPkg.Action), decryptedData)
 		if err != nil {
 			if err.Error() == "NotFound" {
 				e.log(c, "package dispatch failed,err="+err.Error(), zapcore.ErrorLevel)
-				if err = e.gatewayErrorResponse(c, coderName, gatewayv1.ActionId_NoActionHandler, uint32(rqAction.Id)); err != nil {
+				if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_NoActionHandler, uint32(rqAction.Id)); err != nil {
 					e.log(c, err.Error(), zapcore.ErrorLevel)
 				}
 				return
 			}
 			e.log(c, "package dispatch failed,err="+err.Error(), zapcore.ErrorLevel)
-			if err = e.gatewayErrorResponse(c, coderName, gatewayv1.ActionId_InternalErr, uint32(rqAction.Id)); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_InternalErr, uint32(rqAction.Id)); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -167,7 +169,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	})
 	if err != nil {
 		e.log(c, "codec decode failed, err="+err.Error(), zapcore.ErrorLevel, zap.ByteString("package", rawPkg))
-		if err = e.gatewayErrorResponse(c, coderName, gatewayv1.ActionId_PackageErr, 0); err != nil {
+		if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_PackageErr, 0); err != nil {
 			e.log(c, err.Error(), zapcore.ErrorLevel)
 		}
 		return
@@ -227,10 +229,16 @@ func (e *Event) initCodec(c socket.Conn, pkg []byte) (coderName codec.Name, unpa
 		c.Context().SetOptional("codec", unpacker)
 		c.Context().SetOptional("pkgBuilder", pkgBuilder)
 		c.Context().SetOptional("coderName", coderName)
+		c.Context().SetOptional("dataBuilder", e.codedProvider.Provider(coderName))
 		e.log(c, utils.ToStr("codec format=", coderName.String()), zapcore.InfoLevel)
 	}
 
 	return
+}
+
+func (e *Event) DataBuilder(c socket.Conn) codec.DataBuilder {
+	v, _ := c.Context().GetOptional("dataBuilder")
+	return v.(codec.DataBuilder)
 }
 
 func (e *Event) unpack(c socket.Conn, unpacker codec.Codec, pkg []byte, handler func(pkg []byte)) error {
@@ -354,23 +362,34 @@ func (e *Event) gatewayWrite(c socket.Conn, action codec.Action, data []byte) er
 	return nil
 }
 
-func (e *Event) Send(c socket.Conn, id codec.Action, data []byte) (err error) {
-	if err = e.gatewayWrite(c, id, data); err != nil {
-		e.log(c, "send action failed", zapcore.ErrorLevel, zap.String("action", id.String()), zap.ByteString("pkg", data))
+func (e *Event) Send(c socket.Conn, a codec.Action, data []byte) (err error) {
+	if err = e.gatewayWrite(c, a, data); err != nil {
+		e.log(c, "send action failed", zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("pkg", data))
 	} else {
-		e.log(c, "sent action["+id.String()+"]", zapcore.DebugLevel)
+		e.log(c, "sent action["+a.String()+"]", zapcore.DebugLevel)
 	}
 	return
 }
 
-func (e *Event) gatewayErrorResponse(c socket.Conn, name codec.Name, actionId gatewayv1.ActionId, triggerActionId uint32) error {
-	data := &gatewayv1.GatewayErrResponse{TriggerAction: triggerActionId}
-	buildData, err := e.am.HandleGatewayErrorResponse(name, data)
+func (e *Event) SendAction(c socket.Conn, a codec.Action, data codec.DataPtr) (err error) {
+	b := e.DataBuilder(c)
+	bb, err := b.Pack(data)
 	if err != nil {
-		return utils.NewWrappedError("gateway error response build data failed", err)
+		return utils.NewWrappedError("gateway build data failed", err)
 	}
 
-	act := action.New(actionId)
-	e.log(c, "gateway response, action="+act.String(), zapcore.ErrorLevel, zap.String("action", act.String()), zap.Uint32("triggerActionId", triggerActionId))
-	return e.gatewayWrite(c, act, buildData)
+	if err = e.gatewayWrite(c, a, bb); err != nil {
+		e.log(c, "send action failed", zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("pkg", bb))
+	} else {
+		e.log(c, "sent action["+a.String()+"]", zapcore.DebugLevel)
+	}
+	return
+}
+
+func (e *Event) gatewayErrorResponse(c socket.Conn, actionId gatewayv1.ActionId, triggerActionId uint32) error {
+	data := &gatewayv1.GatewayErrResponse{TriggerAction: triggerActionId}
+
+	a := action.New(actionId)
+	e.log(c, "gateway response, action="+a.String(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.Uint32("triggerActionId", triggerActionId))
+	return e.SendAction(c, a, data)
 }
