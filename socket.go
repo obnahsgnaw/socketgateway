@@ -228,8 +228,8 @@ func (s *Server) Listen(action codec.Action, handler action.Handler) {
 	s.m.RegisterHandlerAction(action, handler)
 }
 
-func (s *Server) Send(c socket.Conn, id codec.Action, data []byte) (err error) {
-	return s.e.Send(c, id, data)
+func (s *Server) Send(c socket.Conn, id codec.Action, data codec.DataPtr) (err error) {
+	return s.e.SendAction(c, id, data)
 }
 
 func (s *Server) Rpc() *rpc2.Server {

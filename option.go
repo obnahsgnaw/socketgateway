@@ -2,6 +2,7 @@ package socketgateway
 
 import (
 	"github.com/obnahsgnaw/application/pkg/security"
+	"github.com/obnahsgnaw/socketgateway/service/codec"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
 	"time"
 )
@@ -60,5 +61,17 @@ func Crypto(crypto *security.EsCrypto) Option {
 func StaticCryptKey(key []byte) Option {
 	return func(s *Server) {
 		s.e.With(eventhandler.StaticCryptKey(key))
+	}
+}
+
+func CodecProvider(p codec.Provider) Option {
+	return func(s *Server) {
+		s.e.With(eventhandler.CodecProvider(p))
+	}
+}
+
+func CodedProvider(p codec.DataBuilderProvider) Option {
+	return func(s *Server) {
+		s.e.With(eventhandler.CodedProvider(p))
 	}
 }

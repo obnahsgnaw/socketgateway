@@ -6,19 +6,17 @@ import (
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/codec"
-	gatewayv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/gateway/v1"
 	"github.com/panjf2000/gnet/v2/pkg/pool/goroutine"
 	"sync"
 )
 
 type Manager struct {
-	handlers            sync.Map // action-id, action-handler
-	actions             sync.Map // action-id, [server-host]action-name
-	servers             sync.Map // server-host => [action-id]action-name
-	closeAction         codec.ActionId
-	remoteHandler       RemoteHandler
-	dateBuilderProvider codec.DataBuilderProvider // for remote
-	gateway             url.Host
+	handlers      sync.Map // action-id, action-handler
+	actions       sync.Map // action-id, [server-host]action-name
+	servers       sync.Map // server-host => [action-id]action-name
+	closeAction   codec.ActionId
+	remoteHandler RemoteHandler
+	gateway       url.Host
 }
 
 type actionHandler struct {
@@ -38,8 +36,7 @@ type actionSet map[codec.ActionId]string // [action-id]action-name
 
 func NewManager(options ...Option) *Manager {
 	m := &Manager{
-		dateBuilderProvider: codec.NewDbp(),
-		gateway:             url.Host{},
+		gateway: url.Host{},
 	}
 	m.With(options...)
 	return m
@@ -65,10 +62,6 @@ func (m *Manager) HandleClose(c socket.Conn) {
 			})
 		}
 	}
-}
-
-func (m *Manager) HandleGatewayErrorResponse(name codec.Name, response *gatewayv1.GatewayErrResponse) ([]byte, error) {
-	return m.dateBuilderProvider.Provider(name).Pack(response)
 }
 
 // RegisterHandlerAction register an action with handler
@@ -166,10 +159,10 @@ func (m *Manager) GetAction(actionId codec.ActionId) (codec.Action, bool) {
 }
 
 // Dispatch the actions
-func (m *Manager) Dispatch(c socket.Conn, name codec.Name, actionId codec.ActionId, actionData []byte) (respAction codec.Action, respData []byte, err error) {
+func (m *Manager) Dispatch(c socket.Conn, name codec.Name, b codec.DataBuilder, actionId codec.ActionId, actionData []byte) (respAction codec.Action, respData []byte, err error) {
 	if actHandler1, ok := m.handlers.Load(actionId); ok {
 		actHandler := actHandler1.(actionHandler)
-		respAction, respData = actHandler.Handler(c, m.dateBuilderProvider.Provider(name), actionData)
+		respAction, respData = actHandler.Handler(c, b, actionData)
 		return
 	}
 
