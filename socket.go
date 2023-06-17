@@ -224,8 +224,8 @@ func (s *Server) AddTicker(ticker eventhandler.TickHandler) {
 	s.e.AddTicker(ticker)
 }
 
-func (s *Server) Listen(action codec.Action, handler action.Handler) {
-	s.m.RegisterHandlerAction(action, handler)
+func (s *Server) Listen(action codec.Action, structure action.DataStructure, handler action.Handler) {
+	s.m.RegisterHandlerAction(action, structure, handler)
 }
 
 func (s *Server) Send(c socket.Conn, id codec.Action, data codec.DataPtr) (err error) {
@@ -286,7 +286,10 @@ func (s *Server) Run(failedCb func(error)) {
 		}
 	}
 	s.Listen(action.New(gatewayv1.ActionId_Ping),
-		func(c socket.Conn, builder codec.DataBuilder, bytes []byte) (respAction codec.Action, respData []byte) {
+		func() codec.DataPtr {
+			return &gatewayv1.PingRequest{}
+		},
+		func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr) {
 			respAction = action.New(gatewayv1.ActionId_Pong)
 			return
 		},
