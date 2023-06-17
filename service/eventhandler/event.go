@@ -13,6 +13,8 @@ import (
 	gatewayv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/gateway/v1"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"strconv"
 	"time"
 )
@@ -116,13 +118,13 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		// 获取action
 		rqAction, ok := e.am.GetAction(codec.ActionId(gwPkg.Action))
 		if !ok {
-			e.log(c, "action no handler, action="+gwPkg.String(), zapcore.ErrorLevel, zap.Uint32("action", gwPkg.Action))
+			e.log(c, "handler not found, action="+gwPkg.String(), zapcore.ErrorLevel, zap.Uint32("action", gwPkg.Action))
 			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_NoActionHandler, gwPkg.Action); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
 		}
-		e.log(c, "handle action： "+rqAction.String(), zapcore.InfoLevel, zap.Uint32("action_id", uint32(rqAction.Id)), zap.String("action_name", rqAction.Name))
+		e.log(c, "request action="+rqAction.String(), zapcore.InfoLevel, zap.Uint32("action_id", uint32(rqAction.Id)), zap.String("action_name", rqAction.Name))
 		// 认证检查， 排除认证相关action
 		if !e.authCheck(c, gatewayv1.ActionId(gwPkg.Action)) {
 			e.log(c, "handle failed, no auth", zapcore.ErrorLevel)
@@ -134,7 +136,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		// 解密
 		decryptedData, err := e.decrypt(c, gatewayv1.ActionId(gwPkg.Action), []byte(gwPkg.Iv), gwPkg.Data)
 		if err != nil {
-			e.log(c, "data decrypt failed, err="+err.Error(), zapcore.ErrorLevel)
+			e.log(c, "decrypt data failed, err="+err.Error(), zapcore.ErrorLevel)
 			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_DecryptErr, 0); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
@@ -144,12 +146,14 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		// 分发action 获得响应信息
 		respAction, respData, err := e.am.Dispatch(c, coderName, e.DataBuilder(c), codec.ActionId(gwPkg.Action), decryptedData)
 		if err != nil {
-			if err.Error() == "NotFound" {
-				e.log(c, "package dispatch failed,err="+err.Error(), zapcore.ErrorLevel)
-				if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_NoActionHandler, uint32(rqAction.Id)); err != nil {
-					e.log(c, err.Error(), zapcore.ErrorLevel)
+			if st, ok := status.FromError(err); ok {
+				if st.Code() == codes.NotFound {
+					e.log(c, "package dispatch failed,err="+err.Error(), zapcore.ErrorLevel)
+					if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_NoActionHandler, uint32(rqAction.Id)); err != nil {
+						e.log(c, err.Error(), zapcore.ErrorLevel)
+					}
+					return
 				}
-				return
 			}
 			e.log(c, "package dispatch failed,err="+err.Error(), zapcore.ErrorLevel)
 			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_InternalErr, uint32(rqAction.Id)); err != nil {
@@ -159,11 +163,11 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		}
 		// 回复
 		if respAction.Id > 0 {
-			e.log(c, "handle success, response action= "+respAction.String(), zapcore.InfoLevel)
+			e.log(c, "response action="+respAction.String(), zapcore.InfoLevel, zap.Uint32("action_id", uint32(respAction.Id)), zap.String("action_name", respAction.Name), zap.ByteString("data", respData))
 			if err = e.gatewayWrite(c, respAction, respData); err != nil {
 				e.log(c, "response failed,err="+err.Error(), zapcore.ErrorLevel)
 			} else {
-				e.log(c, "action response "+respAction.String(), zapcore.InfoLevel, zap.Uint32("action_id", uint32(rqAction.Id)), zap.String("action_name", rqAction.Name), zap.ByteString("data", respData))
+				e.log(c, "response success", zapcore.InfoLevel)
 			}
 			return
 		}
@@ -203,11 +207,10 @@ func (e *Event) OnShutdown(s *socket.Server) {
 }
 
 func (e *Event) log(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field) {
-	if e.logger != nil {
-		e.logger.Log(l, msg, data...)
-	}
 	if e.logWatcher != nil {
 		e.logWatcher(c, msg, l, data...)
+	} else {
+		e.logger.Log(l, msg, data...)
 	}
 }
 
@@ -232,7 +235,7 @@ func (e *Event) initCodec(c socket.Conn, pkg []byte) (coderName codec.Name, unpa
 		c.Context().SetOptional("pkgBuilder", pkgBuilder)
 		c.Context().SetOptional("coderName", coderName)
 		c.Context().SetOptional("dataBuilder", e.codedProvider.Provider(coderName))
-		e.log(c, utils.ToStr("codec format=", coderName.String()), zapcore.InfoLevel)
+		e.log(c, utils.ToStr("data format=", coderName.String()), zapcore.InfoLevel)
 	}
 
 	return

@@ -20,11 +20,14 @@ type Manager struct {
 }
 
 type actionHandler struct {
-	Action  codec.Action
-	Handler Handler
+	Action    codec.Action
+	structure DataStructure
+	Handler   Handler
 }
 
-type Handler func(c socket.Conn, builder codec.DataBuilder, bytes []byte) (respAction codec.Action, respData []byte)
+type DataStructure func() codec.DataPtr
+
+type Handler func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr)
 
 type RemoteHandler interface {
 	Call(serverHost, gateway, format string, c socket.Conn, id codec.ActionId, data []byte) (respAction codec.Action, respData []byte, err error)
@@ -52,8 +55,8 @@ func (m *Manager) With(options ...Option) {
 func (m *Manager) HandleClose(c socket.Conn) {
 	pool := goroutine.Default()
 	defer pool.Release()
-	if h, ok := m.getHandler(m.closeAction); ok {
-		h(c, nil, nil)
+	if _, _, h, ok := m.getHandler(m.closeAction); ok {
+		h(c, nil)
 	}
 	for _, s := range m.getServers(m.closeAction) {
 		if m.remoteHandler != nil {
@@ -65,8 +68,8 @@ func (m *Manager) HandleClose(c socket.Conn) {
 }
 
 // RegisterHandlerAction register an action with handler
-func (m *Manager) RegisterHandlerAction(action codec.Action, handler Handler) {
-	m.handlers.Store(action.Id, actionHandler{Action: action, Handler: handler})
+func (m *Manager) RegisterHandlerAction(action codec.Action, structure DataStructure, handler Handler) {
+	m.handlers.Store(action.Id, actionHandler{Action: action, structure: structure, Handler: handler})
 }
 
 // RegisterRemoteAction register an action with server host
@@ -129,12 +132,13 @@ func (m *Manager) getRandServer(actionId codec.ActionId) string {
 	return list[utils.RandInt(len(list))]
 }
 
-func (m *Manager) getHandler(actionId codec.ActionId) (Handler, bool) {
+func (m *Manager) getHandler(actionId codec.ActionId) (codec.Action, DataStructure, Handler, bool) {
 	if h, ok := m.handlers.Load(actionId); ok {
-		return h.(actionHandler).Handler, true
+		h1 := h.(actionHandler)
+		return h1.Action, h1.structure, h1.Handler, true
 	}
 
-	return nil, false
+	return codec.Action{}, nil, nil, false
 }
 
 func (m *Manager) GetAction(actionId codec.ActionId) (codec.Action, bool) {
@@ -160,9 +164,14 @@ func (m *Manager) GetAction(actionId codec.ActionId) (codec.Action, bool) {
 
 // Dispatch the actions
 func (m *Manager) Dispatch(c socket.Conn, name codec.Name, b codec.DataBuilder, actionId codec.ActionId, actionData []byte) (respAction codec.Action, respData []byte, err error) {
-	if actHandler1, ok := m.handlers.Load(actionId); ok {
-		actHandler := actHandler1.(actionHandler)
-		respAction, respData = actHandler.Handler(c, b, actionData)
+	if _, s, h, ok := m.getHandler(actionId); ok {
+		p := s()
+		if err = b.Unpack(actionData, p); err != nil {
+			return codec.Action{}, nil, err
+		}
+		var respPtr codec.DataPtr
+		respAction, respPtr = h(c, p)
+		respData, err = b.Pack(respPtr)
 		return
 	}
 
