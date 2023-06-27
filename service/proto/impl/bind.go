@@ -23,11 +23,11 @@ func (gw *BindService) BindId(_ context.Context, in *bindv1.BindIdRequest) (_ *b
 		err = errors.New("fd is required")
 		return
 	}
-	if in.Id.Id == "" {
+	if in.Id == "" {
 		err = errors.New("id is required")
 		return
 	}
-	if in.Id.Type == "" {
+	if in.IdType == "" {
 		err = errors.New("type is required")
 		return
 	}
@@ -37,24 +37,24 @@ func (gw *BindService) BindId(_ context.Context, in *bindv1.BindIdRequest) (_ *b
 		return
 	}
 	gw.s.BindId(conn, socket.ConnId{
-		Id:   in.Id.Id,
-		Type: in.Id.Type,
+		Id:   in.Id,
+		Type: in.IdType,
 	})
 	return
 }
 
 func (gw *BindService) BindExist(_ context.Context, in *bindv1.BindExistRequest) (p *bindv1.BindExistResponse, err error) {
-	if in.Id.Id == "" {
+	if in.Id == "" {
 		err = errors.New("id is required")
 		return
 	}
-	if in.Id.Type == "" {
+	if in.IdType == "" {
 		err = errors.New("type is required")
 		return
 	}
 	conn := gw.s.GetIdConn(socket.ConnId{
-		Id:   in.Id.Id,
-		Type: in.Id.Type,
+		Id:   in.Id,
+		Type: in.IdType,
 	})
 	p.Exist = conn == nil
 	return
