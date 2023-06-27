@@ -10,10 +10,12 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"log"
+	"time"
 )
 
 func main() {
 	app := application.New("demo", "demo")
+	app.With(application.EtcdRegister([]string{"127.0.0.1:2379"}, time.Second*5))
 
 	s := socketgateway.New(app, sockettype.TCP, endtype.Backend, url.Host{Ip: "127.0.0.1", Port: 8001})
 	s.WithRpcServer(8002)

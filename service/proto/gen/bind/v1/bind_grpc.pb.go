@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	BindService_BindId_FullMethodName = "/bind.v1.BindService/Id"
+	BindService_BindId_FullMethodName    = "/bind.v1.BindService/BindId"
+	BindService_BindExist_FullMethodName = "/bind.v1.BindService/BindExist"
 )
 
 // BindServiceClient is the client API for BindService service.
@@ -28,6 +29,7 @@ const (
 type BindServiceClient interface {
 	// bind id and type on socket conn
 	BindId(ctx context.Context, in *BindIdRequest, opts ...grpc.CallOption) (*BindIdResponse, error)
+	BindExist(ctx context.Context, in *BindExistRequest, opts ...grpc.CallOption) (*BindExistResponse, error)
 }
 
 type bindServiceClient struct {
@@ -47,12 +49,22 @@ func (c *bindServiceClient) BindId(ctx context.Context, in *BindIdRequest, opts 
 	return out, nil
 }
 
+func (c *bindServiceClient) BindExist(ctx context.Context, in *BindExistRequest, opts ...grpc.CallOption) (*BindExistResponse, error) {
+	out := new(BindExistResponse)
+	err := c.cc.Invoke(ctx, BindService_BindExist_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BindServiceServer is the server API for BindService service.
 // All implementations must embed UnimplementedBindServiceServer
 // for forward compatibility
 type BindServiceServer interface {
 	// bind id and type on socket conn
 	BindId(context.Context, *BindIdRequest) (*BindIdResponse, error)
+	BindExist(context.Context, *BindExistRequest) (*BindExistResponse, error)
 	mustEmbedUnimplementedBindServiceServer()
 }
 
@@ -61,7 +73,10 @@ type UnimplementedBindServiceServer struct {
 }
 
 func (UnimplementedBindServiceServer) BindId(context.Context, *BindIdRequest) (*BindIdResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Id not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method BindId not implemented")
+}
+func (UnimplementedBindServiceServer) BindExist(context.Context, *BindExistRequest) (*BindExistResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BindExist not implemented")
 }
 func (UnimplementedBindServiceServer) mustEmbedUnimplementedBindServiceServer() {}
 
@@ -94,6 +109,24 @@ func _BindService_BindId_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BindService_BindExist_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BindExistRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BindServiceServer).BindExist(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BindService_BindExist_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BindServiceServer).BindExist(ctx, req.(*BindExistRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BindService_ServiceDesc is the grpc.ServiceDesc for BindService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -102,8 +135,12 @@ var BindService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*BindServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Id",
+			MethodName: "BindId",
 			Handler:    _BindService_BindId_Handler,
+		},
+		{
+			MethodName: "BindExist",
+			Handler:    _BindService_BindExist_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

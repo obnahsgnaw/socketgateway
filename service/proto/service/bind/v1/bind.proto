@@ -5,6 +5,7 @@ package bind.v1;
 service BindService{
   // bind id and type on socket conn
   rpc BindId(BindIdRequest) returns (BindIdResponse);
+  rpc BindExist(BindExistRequest) returns (BindExistResponse);
 }
 // request
 message BindIdRequest{
@@ -17,3 +18,16 @@ message BindIdRequest{
 }
 // response
 message BindIdResponse{}
+
+// request
+message BindExistRequest{
+  message BindId{
+    string id = 1;
+    string type = 2;
+  }
+  BindId id = 2;
+}
+// response
+message BindExistResponse{
+  bool exist = 1;
+}
