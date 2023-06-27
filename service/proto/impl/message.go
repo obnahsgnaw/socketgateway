@@ -32,12 +32,12 @@ func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessa
 		return
 	}
 	var c socket.Conn
-	if in.Fd > 0 {
-		c = gw.s.GetFdConn(int(in.Fd))
-	} else if in.Id.Id != "" {
+	if in.GetFd() > 0 {
+		c = gw.s.GetFdConn(int(in.GetFd()))
+	} else if in.GetId() != nil {
 		c = gw.s.GetIdConn(socket.ConnId{
-			Id:   in.Id.Id,
-			Type: in.Id.Type,
+			Id:   in.GetId().Id,
+			Type: in.GetId().Type,
 		})
 	}
 	if c == nil {

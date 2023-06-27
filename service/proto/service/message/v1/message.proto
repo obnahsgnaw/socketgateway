@@ -12,8 +12,10 @@ message SendMessageRequest{
     string id = 1;
     string type = 2;
   }
-  int64 fd = 1;
-  BindId id = 2;
+  oneof target {
+    int64 fd = 1;
+    BindId id = 2;
+  }
   uint32 action_id = 3;
   string action_name = 4;
   bytes message = 5;
