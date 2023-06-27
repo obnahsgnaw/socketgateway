@@ -34,8 +34,11 @@ func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessa
 	var c socket.Conn
 	if in.Fd > 0 {
 		c = gw.s.GetFdConn(int(in.Fd))
-	} else if in.Id != "" {
-		c = gw.s.GetIdConn(in.Id)
+	} else if in.Id.Id != "" {
+		c = gw.s.GetIdConn(socket.ConnId{
+			Id:   in.Id.Id,
+			Type: in.Id.Type,
+		})
 	}
 	if c == nil {
 		err = errors.New("fd conn not exists")

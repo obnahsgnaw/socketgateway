@@ -65,3 +65,8 @@ asset:
 	@echo "Package asset file..."
 	@go-bindata -o=asset/asset.go -pkg=asset service/doc/html/...
 	@echo "Done"
+.PHONY: pb
+pb:
+	@echo "generate proto..."
+	@cd service/proto/service && buf generate
+	@echo "Done"

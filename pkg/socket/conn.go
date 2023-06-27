@@ -29,6 +29,10 @@ type ConnId struct {
 	Type string
 }
 
+func (b ConnId) String() string {
+	return b.Type + ":" + b.Id
+}
+
 func NewContext() *ConnContext {
 	return &ConnContext{
 		connectedAt:  time.Now(),
