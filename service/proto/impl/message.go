@@ -27,7 +27,7 @@ func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessa
 		err = errors.New("action id is required")
 		return
 	}
-	if len(in.GetMessage()) == 0 {
+	if len(in.GetPbMessage()) == 0 || len(in.GetJsonMessage()) == 0 {
 		err = errors.New("message is required")
 		return
 	}
@@ -44,7 +44,15 @@ func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessa
 		err = errors.New("fd conn not exists")
 		return
 	}
-	if err = gw.e.Send(c, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), in.Message); err != nil {
+	n, _ := c.Context().GetOptional("coderName")
+	coderName := n.(codec.Name)
+	var msg []byte
+	if coderName == codec.Proto {
+		msg = in.PbMessage
+	} else {
+		msg = in.JsonMessage
+	}
+	if err = gw.e.Send(c, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
 		err = errors.New("send message failed, err=" + err.Error())
 	}
 

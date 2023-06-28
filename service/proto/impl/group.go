@@ -61,14 +61,24 @@ func (gw *GroupService) BroadcastGroup(_ context.Context, in *groupv1.BroadcastG
 		err = errors.New("action id is required")
 		return
 	}
-	if len(in.GetMessage()) == 0 {
+	if len(in.GetPbMessage()) == 0 || len(in.GetJsonMessage()) == 0 {
 		err = errors.New("message is required")
 		return
 	}
 	gw.s.Groups().GetGroup(in.GetGroup().GetName()).Broadcast(func(fd int, id string) {
 		if in.Id == "" || in.Id == id {
 			conn := gw.s.GetFdConn(fd)
-			_ = gw.e.Send(conn, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), in.Message)
+
+			n, _ := conn.Context().GetOptional("coderName")
+			coderName := n.(codec.Name)
+			var msg []byte
+			if coderName == codec.Proto {
+				msg = in.PbMessage
+			} else {
+				msg = in.JsonMessage
+			}
+
+			_ = gw.e.Send(conn, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg)
 		}
 	})
 	return
