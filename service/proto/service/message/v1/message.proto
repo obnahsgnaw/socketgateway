@@ -18,7 +18,8 @@ message SendMessageRequest{
   }
   uint32 action_id = 3;
   string action_name = 4;
-  bytes message = 5;
+  bytes pb_message = 5;
+  bytes json_message = 6;
 }
 
 message SendMessageResponse{}
