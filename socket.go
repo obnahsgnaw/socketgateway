@@ -69,9 +69,21 @@ func sct2st(st sockettype.SocketType) (sst servertype.ServerType) {
 		sst = servertype.Udp
 		break
 	default:
-		sst = ""
+		panic("trans socket type to server type failed")
 	}
 	return
+}
+
+func st2hdt(sst servertype.ServerType) servertype.ServerType {
+	switch sst {
+	case servertype.Tcp:
+		return servertype.TcpHdl
+	case servertype.Wss:
+		return servertype.WssHdl
+	case servertype.Udp:
+		return servertype.UdpHdl
+	}
+	panic("trans server type to handler type failed")
 }
 
 func New(app *application.Application, st sockettype.SocketType, et endtype.EndType, host url.Host, options ...Option) *Server {
@@ -106,7 +118,7 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 		ServerInfo: regCenter.ServerInfo{
 			Id:      s.id,
 			Name:    s.name,
-			Type:    servertype.Hdl.String(),
+			Type:    st2hdt(s.st).String(),
 			EndType: s.et.String(),
 		},
 		Host:      "",
