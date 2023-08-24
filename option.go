@@ -21,12 +21,6 @@ func Keepalive(interval uint) Option {
 	}
 }
 
-func Poll() Option {
-	return func(s *Server) {
-		s.poll = true
-	}
-}
-
 func AuthCheck(interval time.Duration) Option {
 	return func(s *Server) {
 		s.e.With(eventhandler.AuthCheck(interval))

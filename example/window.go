@@ -8,7 +8,6 @@ import (
 	"github.com/obnahsgnaw/application/pkg/url"
 	"github.com/obnahsgnaw/socketgateway"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/gnet"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -23,7 +22,6 @@ func main() {
 	app.With(application.EtcdRegister([]string{"127.0.0.1:2379"}, time.Second*5))
 
 	s := socketgateway.New(app, sockettype.TCP, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
-	s.SetSocketEngine(gnet.New())
 	s.WithRpcServer(8002)
 	s.WithDocServer("", 8003)
 	s.WatchLog(func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field) {

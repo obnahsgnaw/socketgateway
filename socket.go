@@ -13,7 +13,6 @@ import (
 	rpc2 "github.com/obnahsgnaw/rpc"
 	"github.com/obnahsgnaw/socketgateway/asset"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/gnet"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/action"
@@ -45,6 +44,7 @@ type Server struct {
 	m              *action.Manager
 	ss             *socket.Server
 	e              *eventhandler.Event
+	se             socket.Engine
 	regInfo        *regCenter.RegInfo
 	rs             *rpc2.Server
 	ds             *DocServer
@@ -263,6 +263,10 @@ func (s *Server) Release() {
 	_ = s.logger.Sync()
 }
 
+func (s *Server) SetSocketEngine(engine socket.Engine) {
+	s.se = engine
+}
+
 func (s *Server) Run(failedCb func(error)) {
 	if s.st == "" {
 		failedCb(errors.New(s.msg("type not support")))
@@ -272,13 +276,10 @@ func (s *Server) Run(failedCb func(error)) {
 		failedCb(s.err)
 		return
 	}
-	var e socket.Engine
-	if s.poll {
-		e = gnet.New() // TODO windows问题
-	} else {
-		e = net.New()
+	if s.se == nil {
+		s.se = net.New()
 	}
-	s.ss = socket.New(s.app.Context(), s.sct, s.host.Port, e, s.e, &socket.Config{
+	s.ss = socket.New(s.app.Context(), s.sct, s.host.Port, s.se, s.e, &socket.Config{
 		MultiCore: true,
 		Keepalive: s.keepalive,
 		NoDelay:   true,
