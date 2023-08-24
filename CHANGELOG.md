@@ -1,4 +1,12 @@
 
+<a name="v0.7.1"></a>
+## [v0.7.1](https://8.140.161.172/wangsb/wgateway/compare/v0.7.0...v0.7.1) (2023-08-24)
+
+### Bug Fixes
+
+* **socket.go:** fix sockent.engine for windows
+
+
 <a name="v0.7.0"></a>
 ## [v0.7.0](https://8.140.161.172/wangsb/wgateway/compare/v0.6.0...v0.7.0) (2023-08-24)
 
