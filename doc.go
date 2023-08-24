@@ -98,7 +98,7 @@ func (s *DocServer) initTemplate() error {
 
 func (s *DocServer) initIndexRoute() {
 	// 一个模块的文档（便于一个模块一个模块提供而不是全部提供）
-	s.engine.GET("/docs/:md", func(c *gin.Context) {
+	s.engine.GET(s.moduleDoc, func(c *gin.Context) {
 		var gwUrls = make(doc.ModuleDoc)
 		// 非网管模块 一直显示网关文档
 		if c.Param("md") != "gateway" {
@@ -107,7 +107,7 @@ func (s *DocServer) initIndexRoute() {
 		c.Header("Cache-control", "private,max-age=86400")
 		c.HTML(http.StatusOK, "index.tmpl", gin.H{
 			"prefix":  s.config.gwPrefix,
-			"id":      c.Param("md"),
+			"module":  c.Param("md"),
 			"gateway": gwUrls,
 			"urls":    s.Manager.GetModuleDocs(c.Param("md")),
 		})
