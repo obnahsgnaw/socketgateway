@@ -19,7 +19,7 @@ type ConnContext struct {
 	lastActiveAt time.Time
 	id           ConnId
 	upgraded     bool
-	authed       bool
+	authUser     *AuthUser
 	optional     sync.Map
 }
 
@@ -27,6 +27,11 @@ type ConnContext struct {
 type ConnId struct {
 	Id   string
 	Type string
+}
+
+type AuthUser struct {
+	Id   uint
+	Name string
 }
 
 func (b ConnId) String() string {
@@ -39,7 +44,7 @@ func NewContext() *ConnContext {
 		lastActiveAt: time.Now(),
 		id:           ConnId{},
 		upgraded:     false,
-		authed:       false,
+		authUser:     nil,
 		optional:     sync.Map{},
 	}
 }
@@ -72,12 +77,16 @@ func (c *ConnContext) Upgraded() bool {
 	return c.upgraded
 }
 
-func (c *ConnContext) auth() {
-	c.authed = true
+func (c *ConnContext) Auth(u *AuthUser) {
+	c.authUser = u
 }
 
 func (c *ConnContext) Authed() bool {
-	return c.authed
+	return c.authUser != nil
+}
+
+func (c *ConnContext) User() *AuthUser {
+	return c.authUser
 }
 
 // GetOptional 返回自定义的数据

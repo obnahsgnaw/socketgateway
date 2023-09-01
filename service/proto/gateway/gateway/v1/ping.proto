@@ -1,9 +1,12 @@
 /*通信测试*/
 syntax = "proto3";
 package gateway.v1;
+import "google/protobuf/timestamp.proto";
 
 // Ping
 message PingRequest{}
 
 // Pong
-message PongResponse{}
+message PongResponse{
+  google.protobuf.Timestamp timestamp = 1;
+}

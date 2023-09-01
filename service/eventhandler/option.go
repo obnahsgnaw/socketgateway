@@ -1,7 +1,6 @@
 package eventhandler
 
 import (
-	"github.com/obnahsgnaw/application/pkg/security"
 	"github.com/obnahsgnaw/socketgateway/service/codec"
 	"go.uber.org/zap"
 	"time"
@@ -12,7 +11,7 @@ type Option func(event *Event)
 func AuthCheck(interval time.Duration) Option {
 	return func(event *Event) {
 		if interval > 0 {
-			event.AddTicker(authTicker(interval))
+			event.AddTicker("auth-ticker", authTicker(interval))
 		}
 	}
 }
@@ -20,7 +19,7 @@ func AuthCheck(interval time.Duration) Option {
 func Heartbeat(interval time.Duration) Option {
 	return func(event *Event) {
 		if interval > 0 {
-			event.AddTicker(heartbeatTicker(interval))
+			event.AddTicker("heartbeat-ticker", heartbeatTicker(interval))
 		}
 	}
 }
@@ -28,6 +27,7 @@ func Heartbeat(interval time.Duration) Option {
 func Auth() Option {
 	return func(event *Event) {
 		event.authEnable = true
+		event.AddTicker("auth-ticker", authTicker(time.Second*10))
 	}
 }
 
@@ -37,15 +37,10 @@ func Tick(interval time.Duration) Option {
 	}
 }
 
-func Crypto(crypto *security.EsCrypto) Option {
+func Crypto(crypto Cryptor, noAuthKey []byte) Option {
 	return func(event *Event) {
 		event.crypto = crypto
-	}
-}
-
-func StaticCryptKey(key []byte) Option {
-	return func(event *Event) {
-		event.staticEsKey = key
+		event.staticEsKey = noAuthKey
 	}
 }
 

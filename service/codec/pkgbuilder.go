@@ -52,16 +52,16 @@ type PkgBuilder interface {
 }
 
 func packErr(err error) error {
-	return errors.New("Pack package failed, err=" + err.Error())
+	return errors.New("pkg builder error: Pack package failed, err=" + err.Error())
 }
 
 func unpackErr(err error) error {
-	return errors.New("Unpack package failed, err=" + err.Error())
+	return errors.New("pkg builder error: Unpack package failed, err=" + err.Error())
 }
 
 var (
-	ErrNoData  = errors.New("Unpack package failed, err= no data. ")
-	ErrDataNil = errors.New("pack package failed, err= data is nil. ")
+	ErrNoData  = errors.New("pkg builder error: Unpack package failed, err= no data. ")
+	ErrDataNil = errors.New("pkg builder error: pack package failed, err= data is nil. ")
 )
 
 // ProtobufPackageBuilder protobuf 包构建器

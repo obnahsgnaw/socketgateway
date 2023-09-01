@@ -34,7 +34,7 @@ func (c *Conn) Context() *socket.ConnContext {
 
 func (c *Conn) Read() ([]byte, error) {
 	if len(c.pkg) == 0 {
-		return nil, errors.New("no")
+		return nil, errors.New("conn error: no data to read")
 	}
 	b := c.pkg[0]
 	c.pkg = c.pkg[1:]

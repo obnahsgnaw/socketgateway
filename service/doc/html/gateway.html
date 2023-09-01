@@ -198,17 +198,9 @@
                 </li>
               
                 <li>
-                  <a href="#gateway.v1.AuthRequest.Credential"><span class="badge">M</span>AuthRequest.Credential</a>
-                </li>
-              
-                <li>
                   <a href="#gateway.v1.AuthResponse"><span class="badge">M</span>AuthResponse</a>
                 </li>
               
-              
-                <li>
-                  <a href="#gateway.v1.AuthResponse.Status"><span class="badge">E</span>AuthResponse.Status</a>
-                </li>
               
               
               
@@ -221,13 +213,17 @@
             <ul>
               
                 <li>
-                  <a href="#gateway.v1.GatewayErrResponse"><span class="badge">M</span>GatewayErrResponse</a>
+                  <a href="#gateway.v1.GatewayError"><span class="badge">M</span>GatewayError</a>
                 </li>
               
                 <li>
                   <a href="#gateway.v1.GatewayPackage"><span class="badge">M</span>GatewayPackage</a>
                 </li>
               
+              
+                <li>
+                  <a href="#gateway.v1.GatewayError.Status"><span class="badge">E</span>GatewayError.Status</a>
+                </li>
               
               
               
@@ -262,13 +258,205 @@
       <div class="file-heading">
         <h2 id="gateway/v1/actid.proto">gateway/v1/actid.proto</h2><a href="#title">Top</a>
       </div>
-      <p>Socket协议网关层协议</p><p>整体说明：</p><p>1. 协议外层为 GatewayPackage</p><p>1. 协议内层层为各个协议具体的结构数据</p><p>2. 向网关层进行auth认证，得到相关的加解密密钥</p><p>3. 向各个服务发起协议请求</p><p>加解密说：</p><p>1. 使用非对称加密(Rsa pkcs1.5 1024bit) 向网关层发起auth认证， 得到对称加密密钥</p><p>2. 其他协议使用返回的对称密码进行对称加密（Aes 256 cbc pkcs7）</p><p>3. PackageError 响应不进行加密</p>
+      <p>Socket协议网关层协议</p><p>整体说明：</p><p>1. 协议结构为 GatewayPackage， 请求和响应都是这个结构, 包含action id 和 data， action id为业务标识， data为业务数据提</p><p>2. 网关层有3个主协议， ping-pong, authReq-authResp, gatewayErr</p><p>3. 先解析网关层包结构，跟进业务标识action解析对应的data结构</p><p>4. 如果有认证，向网关层进行auth认证，得到相关的加解密密钥</p><p>5. 向各个服务发起协议请求</p><p>认证说明：</p><p>1. 从用户中心获取用于认证的token</p><p>2. 发起auth协议</p><p>加解密说：</p><p>1. 未认证之前通过固定密钥进行加解密，比如ping-pong auth等</p><p>2. 认证之后采用认证返回的密钥来进行加解密（包含 ping-pong）</p><p>3. 加解密iv等追加到加密后数据的后端（8位、16位， 根据加解密方法确定）</p>
 
       
 
       
         <h3 id="gateway.v1.ActionId">ActionId</h3>
         <p>网关层的Action id</p>
+        <table class="enum-table">
+          <thead>
+            <tr><td>Name</td><td>Number</td><td>Description</td></tr>
+          </thead>
+          <tbody>
+            
+              <tr>
+                <td>None</td>
+                <td>0</td>
+                <td><p></p></td>
+              </tr>
+            
+              <tr>
+                <td>GatewayErr</td>
+                <td>1</td>
+                <td><p>ping 测试</p></td>
+              </tr>
+            
+              <tr>
+                <td>Ping</td>
+                <td>11</td>
+                <td><p>ping 测试</p></td>
+              </tr>
+            
+              <tr>
+                <td>Pong</td>
+                <td>12</td>
+                <td><p>pong 响应</p></td>
+              </tr>
+            
+              <tr>
+                <td>AuthReq</td>
+                <td>13</td>
+                <td><p>认证的请求</p></td>
+              </tr>
+            
+              <tr>
+                <td>AuthResp</td>
+                <td>14</td>
+                <td><p>认证的响应</p></td>
+              </tr>
+            
+          </tbody>
+        </table>
+      
+
+      
+
+      
+    
+      
+      <div class="file-heading">
+        <h2 id="gateway/v1/auth.proto">gateway/v1/auth.proto</h2><a href="#title">Top</a>
+      </div>
+      <p>网关层认证</p>
+
+      
+        <h3 id="gateway.v1.AuthRequest">AuthRequest</h3>
+        <p>网关层认证的请求</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>token</td>
+                  <td><a href="#string">string</a></td>
+                  <td></td>
+                  <td><p>认证token </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="gateway.v1.AuthResponse">AuthResponse</h3>
+        <p>网关层认证的响应</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>success</td>
+                  <td><a href="#bool">bool</a></td>
+                  <td></td>
+                  <td><p>成功还是失败 </p></td>
+                </tr>
+              
+                <tr>
+                  <td>crypt_key</td>
+                  <td><a href="#bytes">bytes</a></td>
+                  <td></td>
+                  <td><p>后续动作的对称加密密钥 </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+
+      
+
+      
+
+      
+    
+      
+      <div class="file-heading">
+        <h2 id="gateway/v1/package.proto">gateway/v1/package.proto</h2><a href="#title">Top</a>
+      </div>
+      <p>网关层通用请求</p>
+
+      
+        <h3 id="gateway.v1.GatewayError">GatewayError</h3>
+        <p>网关层通用错误响应</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>status</td>
+                  <td><a href="#gateway.v1.GatewayError.Status">GatewayError.Status</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+                <tr>
+                  <td>trigger_action</td>
+                  <td><a href="#uint32">uint32</a></td>
+                  <td></td>
+                  <td><p>出错的action id </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+        <h3 id="gateway.v1.GatewayPackage">GatewayPackage</h3>
+        <p>网关层通用请求和响应的包， 所有协议包均需以此包结构构建</p>
+
+        
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>action</td>
+                  <td><a href="#uint32">uint32</a></td>
+                  <td></td>
+                  <td><p>协议 id </p></td>
+                </tr>
+              
+                <tr>
+                  <td>data</td>
+                  <td><a href="#bytes">bytes</a></td>
+                  <td></td>
+                  <td><p>协议数据体 </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
+
+        
+      
+
+      
+        <h3 id="gateway.v1.GatewayError.Status">GatewayError.Status</h3>
+        <p></p>
         <table class="enum-table">
           <thead>
             <tr><td>Name</td><td>Number</td><td>Description</td></tr>
@@ -317,261 +505,8 @@
                 <td><p>未认证</p></td>
               </tr>
             
-              <tr>
-                <td>Ping</td>
-                <td>21</td>
-                <td><p>ping 测试</p></td>
-              </tr>
-            
-              <tr>
-                <td>Pong</td>
-                <td>22</td>
-                <td><p>pong 响应</p></td>
-              </tr>
-            
-              <tr>
-                <td>AuthReq</td>
-                <td>23</td>
-                <td><p>认证的请求</p></td>
-              </tr>
-            
-              <tr>
-                <td>AuthResp</td>
-                <td>24</td>
-                <td><p>认证的响应</p></td>
-              </tr>
-            
           </tbody>
         </table>
-      
-
-      
-
-      
-    
-      
-      <div class="file-heading">
-        <h2 id="gateway/v1/auth.proto">gateway/v1/auth.proto</h2><a href="#title">Top</a>
-      </div>
-      <p>网关层认证</p>
-
-      
-        <h3 id="gateway.v1.AuthRequest">AuthRequest</h3>
-        <p>网关层认证的请求</p>
-
-        
-          <table class="field-table">
-            <thead>
-              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
-            </thead>
-            <tbody>
-              
-                <tr>
-                  <td>id</td>
-                  <td><a href="#string">string</a></td>
-                  <td></td>
-                  <td><p>认证id </p></td>
-                </tr>
-              
-                <tr>
-                  <td>credential</td>
-                  <td><a href="#bytes">bytes</a></td>
-                  <td></td>
-                  <td><p>加密信息 序列化后进行rsa非对称加密 </p></td>
-                </tr>
-              
-            </tbody>
-          </table>
-
-          
-
-        
-      
-        <h3 id="gateway.v1.AuthRequest.Credential">AuthRequest.Credential</h3>
-        <p></p>
-
-        
-          <table class="field-table">
-            <thead>
-              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
-            </thead>
-            <tbody>
-              
-                <tr>
-                  <td>secret</td>
-                  <td><a href="#string">string</a></td>
-                  <td></td>
-                  <td><p>密钥 </p></td>
-                </tr>
-              
-            </tbody>
-          </table>
-
-          
-
-        
-      
-        <h3 id="gateway.v1.AuthResponse">AuthResponse</h3>
-        <p>网关层认证的响应</p>
-
-        
-          <table class="field-table">
-            <thead>
-              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
-            </thead>
-            <tbody>
-              
-                <tr>
-                  <td>status</td>
-                  <td><a href="#gateway.v1.AuthResponse.Status">AuthResponse.Status</a></td>
-                  <td></td>
-                  <td><p>状态码 </p></td>
-                </tr>
-              
-                <tr>
-                  <td>auth_data</td>
-                  <td><a href="#bytes">bytes</a></td>
-                  <td></td>
-                  <td><p>加密信息 GatewayAuthData 序列化后进行rsa非对称加密, secret为后续动作的对称加密密钥 </p></td>
-                </tr>
-              
-            </tbody>
-          </table>
-
-          
-
-        
-      
-
-      
-        <h3 id="gateway.v1.AuthResponse.Status">AuthResponse.Status</h3>
-        <p></p>
-        <table class="enum-table">
-          <thead>
-            <tr><td>Name</td><td>Number</td><td>Description</td></tr>
-          </thead>
-          <tbody>
-            
-              <tr>
-                <td>Success</td>
-                <td>0</td>
-                <td><p>成功</p></td>
-              </tr>
-            
-              <tr>
-                <td>DataErr</td>
-                <td>1</td>
-                <td><p>data格式解析错误</p></td>
-              </tr>
-            
-              <tr>
-                <td>IdNotFound</td>
-                <td>2</td>
-                <td><p>认证id不存在</p></td>
-              </tr>
-            
-              <tr>
-                <td>IdDisabled</td>
-                <td>3</td>
-                <td><p>认证id不可用</p></td>
-              </tr>
-            
-              <tr>
-                <td>IdLocked</td>
-                <td>4</td>
-                <td><p>认证id已锁定</p></td>
-              </tr>
-            
-              <tr>
-                <td>SecretFailed</td>
-                <td>5</td>
-                <td><p>密钥错误</p></td>
-              </tr>
-            
-              <tr>
-                <td>DecryptFailed</td>
-                <td>6</td>
-                <td><p>解码错误</p></td>
-              </tr>
-            
-          </tbody>
-        </table>
-      
-
-      
-
-      
-    
-      
-      <div class="file-heading">
-        <h2 id="gateway/v1/package.proto">gateway/v1/package.proto</h2><a href="#title">Top</a>
-      </div>
-      <p>网关层通用请求</p>
-
-      
-        <h3 id="gateway.v1.GatewayErrResponse">GatewayErrResponse</h3>
-        <p>网关层通用错误响应</p>
-
-        
-          <table class="field-table">
-            <thead>
-              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
-            </thead>
-            <tbody>
-              
-                <tr>
-                  <td>trigger_action</td>
-                  <td><a href="#uint32">uint32</a></td>
-                  <td></td>
-                  <td><p>出错的action id </p></td>
-                </tr>
-              
-            </tbody>
-          </table>
-
-          
-
-        
-      
-        <h3 id="gateway.v1.GatewayPackage">GatewayPackage</h3>
-        <p>网关层通用请求和响应的包， 所有协议包均需以此包结构构建</p>
-
-        
-          <table class="field-table">
-            <thead>
-              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
-            </thead>
-            <tbody>
-              
-                <tr>
-                  <td>action</td>
-                  <td><a href="#uint32">uint32</a></td>
-                  <td></td>
-                  <td><p>协议 id </p></td>
-                </tr>
-              
-                <tr>
-                  <td>data</td>
-                  <td><a href="#bytes">bytes</a></td>
-                  <td></td>
-                  <td><p>协议数据体 </p></td>
-                </tr>
-              
-                <tr>
-                  <td>iv</td>
-                  <td><a href="#string">string</a></td>
-                  <td></td>
-                  <td><p>数据加解密时的iv值 无加密或不需iv则为空 </p></td>
-                </tr>
-              
-            </tbody>
-          </table>
-
-          
-
-        
-      
-
       
 
       
@@ -596,6 +531,23 @@
         <p>Pong</p>
 
         
+          <table class="field-table">
+            <thead>
+              <tr><td>Field</td><td>Type</td><td>Label</td><td>Description</td></tr>
+            </thead>
+            <tbody>
+              
+                <tr>
+                  <td>timestamp</td>
+                  <td><a href="#google.protobuf.Timestamp">google.protobuf.Timestamp</a></td>
+                  <td></td>
+                  <td><p> </p></td>
+                </tr>
+              
+            </tbody>
+          </table>
+
+          
 
         
       

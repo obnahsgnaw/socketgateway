@@ -59,3 +59,18 @@ func (gw *BindService) BindExist(_ context.Context, in *bindv1.BindExistRequest)
 	p.Exist = conn == nil
 	return
 }
+
+func (gw *BindService) UnBindId(_ context.Context, in *bindv1.UnBindIdRequest) (_ *bindv1.UnBindIdResponse, err error) {
+	if in.Fd == 0 {
+		err = errors.New("fd is required")
+		return
+	}
+	conn := gw.s.GetFdConn(int(in.Fd))
+	if conn == nil {
+		err = errors.New("fd conn not exists")
+		return
+	}
+	gw.s.UnbindId(conn)
+
+	return
+}

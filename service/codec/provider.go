@@ -2,7 +2,7 @@ package codec
 
 import "sync"
 
-type Provider func(firstPkg []byte) (Name, Codec, PkgBuilder)
+type Provider func(firstPkg []byte) (Name, Codec, PkgBuilder, []byte)
 
 type Name string
 
@@ -16,21 +16,25 @@ const (
 )
 
 func DefaultProvider() Provider {
-	return func(firstPkg []byte) (Name, Codec, PkgBuilder) {
-		if firstPkg[0] == byte('{') {
-			return Json, NewDelimiterCodec([]byte("SWOOLE_SOCKET_FINISH"), []byte("SWOOLEFN")), NewJsonPackageBuilder()
+	return func(firstPkg []byte) (Name, Codec, PkgBuilder, []byte) {
+		tag := firstPkg[0]
+		firstPkg = firstPkg[1:]
+		if tag == byte('j') {
+			return Json, NewDelimiterCodec([]byte("SWOOLE_SOCKET_FINISH"), []byte("SWOOLEFN")), NewJsonPackageBuilder(), firstPkg
 		}
 
-		return Proto, NewLengthCodec(0xAB, 1024), NewProtobufPackageBuilder()
+		return Proto, NewLengthCodec(0xAB, 1024), NewProtobufPackageBuilder(), firstPkg
 	}
 }
 func WssProvider() Provider {
-	return func(firstPkg []byte) (Name, Codec, PkgBuilder) {
-		if firstPkg[0] == byte('{') {
-			return Json, NewWebsocketCodec(), NewJsonPackageBuilder()
+	return func(firstPkg []byte) (Name, Codec, PkgBuilder, []byte) {
+		tag := firstPkg[0]
+		firstPkg = firstPkg[1:]
+		if tag == byte('j') {
+			return Json, NewWebsocketCodec(), NewJsonPackageBuilder(), firstPkg
 		}
 
-		return Proto, NewWebsocketCodec(), NewProtobufPackageBuilder()
+		return Proto, NewWebsocketCodec(), NewProtobufPackageBuilder(), firstPkg
 	}
 }
 

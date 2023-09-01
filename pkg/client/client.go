@@ -85,7 +85,7 @@ func (c *Client) Stop() {
 
 func (c *Client) Send(pkg []byte) error {
 	if c.conn == nil {
-		return errors.New("not connected")
+		return errors.New("client error: not connected")
 	}
 	_, err := c.conn.Write(pkg)
 

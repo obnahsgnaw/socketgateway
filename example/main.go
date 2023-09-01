@@ -20,6 +20,7 @@ func main() {
 	app := application.New("dev", "dev", application.Debugger(debug.New(dynamic.NewBool(func() bool {
 		return true
 	}))))
+	defer app.Release()
 	app.With(application.EtcdRegister([]string{"127.0.0.1:2379"}, time.Second*5))
 
 	s := socketgateway.New(app, sockettype.TCP, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
@@ -29,7 +30,7 @@ func main() {
 	s.WatchLog(func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field) {
 		log.Println(msg)
 	})
-
+	s.With(socketgateway.ReuseAddr())
 	app.AddServer(s)
 	app.Run(func(err error) {
 		panic(err)

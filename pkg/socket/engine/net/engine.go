@@ -42,7 +42,7 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	e.ctx, e.cancel = context.WithCancel(ctx)
 	e.ws = t == sockettype.WSS
 	if e.ws {
-		return errors.New("not support now")
+		return errors.New("socket engine error: not support now")
 	}
 	e.addr = t.String() + "://:" + strconv.Itoa(p)
 	network, addr := parseProtoAddr(e.addr)

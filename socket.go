@@ -25,36 +25,44 @@ import (
 	"github.com/obnahsgnaw/socketgateway/service/proto/impl"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
 
+const closeAction = 0
+
 // socket, rpc, doc, 注册socket-gateway、发现socket-gateway、发现socket-server
 
 type Server struct {
-	id             string // 模块-子模块
-	name           string
-	st             servertype.ServerType
-	sct            sockettype.SocketType
-	et             endtype.EndType
-	host           url.Host
-	dc             *DocConfig
-	app            *application.Application
-	m              *action.Manager
-	ss             *socket.Server
-	e              *eventhandler.Event
-	se             socket.Engine
-	regInfo        *regCenter.RegInfo
-	rs             *rpc2.Server
-	ds             *DocServer
-	logger         *zap.Logger
-	handlerRegInfo *regCenter.RegInfo
-	err            error
-	poll           bool
-	regEnable      bool
-	keepalive      uint
-	tickInterval   time.Duration
+	id              string // 模块-子模块
+	name            string
+	st              servertype.ServerType
+	sct             sockettype.SocketType
+	et              endtype.EndType
+	host            url.Host
+	dc              *DocConfig
+	app             *application.Application
+	m               *action.Manager
+	ss              *socket.Server
+	e               *eventhandler.Event
+	se              socket.Engine
+	regInfo         *regCenter.RegInfo
+	rs              *rpc2.Server
+	ds              *DocServer
+	logger          *zap.Logger
+	handlerRegInfo  *regCenter.RegInfo
+	err             error
+	poll            bool
+	regEnable       bool
+	keepalive       uint
+	tickInterval    time.Duration
+	reuseAddr       bool
+	authAddress     string
+	crypto          eventhandler.Cryptor
+	noAuthStaticKey []byte
 }
 
 func sct2st(st sockettype.SocketType) (sst servertype.ServerType) {
@@ -189,6 +197,7 @@ func (s *Server) WithRpcServer(port int) *rpc2.Server {
 		Desc: messagev1.MessageService_ServiceDesc,
 		Impl: impl.NewMessageService(s.ss, s.e),
 	})
+	s.m.With(action.CloseAction(closeAction))
 	s.m.With(action.Gateway(ss.Host()))
 	s.m.With(action.RtHandler(impl.NewRemoteHandler()))
 	s.rs = ss
@@ -232,8 +241,8 @@ func (s *Server) Engine() *socket.Server {
 	return s.ss
 }
 
-func (s *Server) AddTicker(ticker eventhandler.TickHandler) {
-	s.e.AddTicker(ticker)
+func (s *Server) AddTicker(name string, ticker eventhandler.TickHandler) {
+	s.e.AddTicker(name, ticker)
 }
 
 func (s *Server) Listen(action codec.Action, structure action.DataStructure, handler action.Handler) {
@@ -284,6 +293,7 @@ func (s *Server) Run(failedCb func(error)) {
 		Keepalive: s.keepalive,
 		NoDelay:   true,
 		Ticker:    s.tickInterval > 0,
+		ReuseAddr: s.reuseAddr,
 	})
 	if s.app.Register() != nil {
 		if s.RegEnabled() {
@@ -298,15 +308,7 @@ func (s *Server) Run(failedCb func(error)) {
 			failedCb(utils.NewWrappedError(s.msg("watch failed"), err))
 		}
 	}
-	s.Listen(action.New(gatewayv1.ActionId_Ping),
-		func() codec.DataPtr {
-			return &gatewayv1.PingRequest{}
-		},
-		func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr) {
-			respAction = action.New(gatewayv1.ActionId_Pong)
-			return
-		},
-	)
+	s.defaultListen()
 	s.logger.Info(utils.ToStr(s.st.String(), "[", s.host.String(), "] start and serving..."))
 	s.ss.SyncStart(failedCb)
 	if s.ds != nil {
@@ -322,6 +324,77 @@ func (s *Server) Run(failedCb func(error)) {
 	if s.rs != nil {
 		s.rs.Run(failedCb)
 	}
+}
+
+func (s *Server) defaultListen() {
+
+	s.Listen(action.New(gatewayv1.ActionId_Ping),
+		func() codec.DataPtr {
+			return &gatewayv1.PingRequest{}
+		},
+		func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr) {
+			respAction = action.New(gatewayv1.ActionId_Pong)
+			respData = &gatewayv1.PongResponse{
+				Timestamp: timestamppb.New(time.Now()),
+			}
+			return
+		},
+	)
+	s.Listen(action.New(gatewayv1.ActionId_AuthReq),
+		func() codec.DataPtr {
+			return &gatewayv1.AuthRequest{}
+		},
+		func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr) {
+			q := data.(*gatewayv1.AuthRequest)
+			respAction = action.New(gatewayv1.ActionId_AuthResp)
+			response := &gatewayv1.AuthResponse{
+				Success:  false,
+				CryptKey: nil,
+			}
+			respData = response
+
+			// 没有地址标识没启用认证 返回默认的密钥
+			if s.authAddress == "" {
+				response.Success = true
+				// 有加解密返回默认密钥
+				if s.crypto != nil {
+					response.CryptKey = s.noAuthStaticKey
+				}
+			} else {
+				// 有认证
+				rq, err := http.NewRequest("GET", s.authAddress, nil)
+				if err != nil {
+					response.Success = false
+					s.Logger().Error(s.msg("auth action forward error: err=" + err.Error()))
+					return
+				}
+				rq.Header.Set("Authorization", "soc "+q.Token)
+				client := &http.Client{}
+				resp, err := client.Do(rq)
+				if err != nil {
+					s.Logger().Error(s.msg("auth action request resp error: err=" + err.Error()))
+					response.Success = false
+				}
+				if resp.StatusCode >= http.StatusMultipleChoices {
+					response.Success = false
+				} else {
+					response.Success = true
+					uidStr := resp.Header.Get("X-User-Id")
+					uid, _ := strconv.Atoi(uidStr)
+					uname := resp.Header.Get("X-User-Name")
+					c.Context().Auth(&socket.AuthUser{
+						Id:   uint(uid),
+						Name: uname,
+					})
+					key := s.crypto.Type().RandKey()
+					c.Context().SetOptional("cryptKey", key)
+					response.CryptKey = key
+				}
+			}
+
+			return
+		},
+	)
 }
 
 func (s *Server) msg(msg ...string) string {
@@ -395,4 +468,14 @@ func (s *Server) debug(msg string) {
 	if s.app.Debugger().Debug() {
 		s.logger.Debug(msg)
 	}
+}
+
+func (s *Server) RegisterGatewayServer(key string) error {
+	if s.app.Register() != nil && key != "" {
+		if err := s.app.Register().Register(s.app.Context(), key, s.host.String(), s.app.RegTtl()); err != nil {
+			return utils.NewWrappedError(s.msg("register gateway failed"), err)
+		}
+	}
+
+	return nil
 }

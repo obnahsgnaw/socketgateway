@@ -19,6 +19,11 @@ message HandleRequest {
     Json = 1;
   }
   Format format = 7;
+  message User{
+    int64 id = 1;
+    string name = 2;
+  }
+  User user = 8;
 }
 
 message HandleResponse {

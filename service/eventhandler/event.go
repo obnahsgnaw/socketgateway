@@ -3,7 +3,6 @@ package eventhandler
 import (
 	"context"
 	"errors"
-	"github.com/obnahsgnaw/application/pkg/security"
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/socketgateway/pkg/group"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
@@ -23,7 +22,7 @@ import (
 type Event struct {
 	ctx           context.Context
 	am            *action.Manager
-	tickHandlers  []TickHandler
+	tickHandlers  map[string]TickHandler
 	logWatcher    func(socket.Conn, string, zapcore.Level, ...zap.Field)
 	logger        *zap.Logger
 	st            sockettype.SocketType
@@ -31,8 +30,8 @@ type Event struct {
 	codedProvider codec.DataBuilderProvider
 	authEnable    bool
 	tickInterval  time.Duration
-	crypto        *security.EsCrypto
-	staticEsKey   []byte // 固定的加解密key，如果使用固定的加解密key则所有action都进行此key的加解密， 否则根据认证后的key进行加解密（认证key不进行此加解密）
+	crypto        Cryptor
+	staticEsKey   []byte // 认证之前采用固定密钥，认证之后采用认证后的密钥
 }
 
 func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, options ...Option) *Event {
@@ -65,6 +64,9 @@ func (e *Event) OnBoot(s *socket.Server) {
 
 func (e *Event) OnOpen(_ *socket.Server, c socket.Conn) {
 	e.log(c, "Connected", zapcore.InfoLevel)
+	if e.crypto != nil {
+		c.Context().SetOptional("cryptKey", e.staticEsKey)
+	}
 }
 
 func (e *Event) OnClose(s *socket.Server, c socket.Conn, err error) {
@@ -102,15 +104,26 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		return
 	}
 	// 获取设置 拆包器、action解码器、数据解码器
-	coderName, unpacker, pkgBuilder := e.initCodec(c, rawPkg)
+	coderName, unpacker, pkgBuilder, initdPkg := e.initCodec(c, rawPkg)
 	// 拆包
-	err = e.codecDecode(c, unpacker, rawPkg, func(packedPkg []byte) {
+	err = e.codecDecode(c, unpacker, initdPkg, func(packedPkg []byte) {
 		e.log(c, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
+
+		// 解密
+		decryptedData, err := e.decrypt(c, packedPkg)
+		if err != nil {
+			e.log(c, "decrypt data failed, err="+err.Error(), zapcore.ErrorLevel)
+			if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_DecryptErr, 0); err != nil {
+				e.log(c, err.Error(), zapcore.ErrorLevel)
+			}
+			return
+		}
+
 		// 解码action
-		gwPkg, err := e.actionDecode(pkgBuilder, packedPkg)
+		gwPkg, err := e.actionDecode(pkgBuilder, decryptedData)
 		if err != nil {
 			e.log(c, "action decode failed, err="+err.Error(), zapcore.ErrorLevel)
-			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_ActionErr, 0); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_ActionErr, 0); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -119,7 +132,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		rqAction, ok := e.am.GetAction(codec.ActionId(gwPkg.Action))
 		if !ok {
 			e.log(c, "handler not found, action="+gwPkg.String(), zapcore.ErrorLevel, zap.Uint32("action", gwPkg.Action))
-			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_NoActionHandler, gwPkg.Action); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_NoActionHandler, gwPkg.Action); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -128,16 +141,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		// 认证检查， 排除认证相关action
 		if !e.authCheck(c, gatewayv1.ActionId(gwPkg.Action)) {
 			e.log(c, "handle failed, no auth", zapcore.ErrorLevel)
-			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_NoAuth, gwPkg.Action); err != nil {
-				e.log(c, err.Error(), zapcore.ErrorLevel)
-			}
-			return
-		}
-		// 解密
-		decryptedData, err := e.decrypt(c, gatewayv1.ActionId(gwPkg.Action), []byte(gwPkg.Iv), gwPkg.Data)
-		if err != nil {
-			e.log(c, "decrypt data failed, err="+err.Error(), zapcore.ErrorLevel)
-			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_DecryptErr, 0); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_NoAuth, gwPkg.Action); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -149,14 +153,14 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 			if st, ok := status.FromError(err); ok {
 				if st.Code() == codes.NotFound {
 					e.log(c, "package dispatch failed,err="+err.Error(), zapcore.ErrorLevel)
-					if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_NoActionHandler, uint32(rqAction.Id)); err != nil {
+					if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_NoActionHandler, uint32(rqAction.Id)); err != nil {
 						e.log(c, err.Error(), zapcore.ErrorLevel)
 					}
 					return
 				}
 			}
 			e.log(c, "package dispatch failed,err="+err.Error(), zapcore.ErrorLevel)
-			if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_InternalErr, uint32(rqAction.Id)); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_InternalErr, uint32(rqAction.Id)); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -174,8 +178,8 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		e.log(c, "handle success, but no response", zapcore.InfoLevel)
 	})
 	if err != nil {
-		e.log(c, "codec decode failed, err="+err.Error(), zapcore.ErrorLevel, zap.ByteString("package", rawPkg))
-		if err = e.gatewayErrorResponse(c, gatewayv1.ActionId_PackageErr, 0); err != nil {
+		e.log(c, "codec decode failed, err="+err.Error(), zapcore.ErrorLevel, zap.ByteString("package", initdPkg))
+		if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_PackageErr, 0); err != nil {
 			e.log(c, err.Error(), zapcore.ErrorLevel)
 		}
 		return
@@ -218,19 +222,20 @@ func (e *Event) WatchLog(watcher func(c socket.Conn, msg string, l zapcore.Level
 	e.logWatcher = watcher
 }
 
-func (e *Event) AddTicker(ticker TickHandler) {
-	e.tickHandlers = append(e.tickHandlers, ticker)
+func (e *Event) AddTicker(name string, ticker TickHandler) {
+	e.tickHandlers[name] = ticker
 }
 
-func (e *Event) initCodec(c socket.Conn, pkg []byte) (coderName codec.Name, unpacker codec.Codec, pkgBuilder codec.PkgBuilder) {
+func (e *Event) initCodec(c socket.Conn, pkg []byte) (coderName codec.Name, unpacker codec.Codec, pkgBuilder codec.PkgBuilder, initdPkg []byte) {
 	if p, ok := c.Context().GetOptional("codec"); ok {
 		unpacker = p.(codec.Codec)
 		pb, _ := c.Context().GetOptional("pkgBuilder")
 		n, _ := c.Context().GetOptional("coderName")
 		pkgBuilder = pb.(codec.PkgBuilder)
 		coderName = n.(codec.Name)
+		initdPkg = pkg
 	} else {
-		coderName, unpacker, pkgBuilder = e.codecProvider(pkg)
+		coderName, unpacker, pkgBuilder, initdPkg = e.codecProvider(pkg)
 		c.Context().SetOptional("codec", unpacker)
 		c.Context().SetOptional("pkgBuilder", pkgBuilder)
 		c.Context().SetOptional("coderName", coderName)
@@ -296,29 +301,12 @@ func (e *Event) authCheck(c socket.Conn, actionId gatewayv1.ActionId) bool {
 	return c.Context().Authed()
 }
 
-func (e *Event) cryptEnable(actionId gatewayv1.ActionId, d bool) bool {
-	// 无加解密处理器
-	if e.crypto == nil {
-		return false
-	}
-	// 固定密钥 全部进行加解密
-	if e.staticEsKey != nil {
-		return true
-	}
-	// 忽略认证action
-	if d && (actionId == gatewayv1.ActionId_AuthReq || actionId == gatewayv1.ActionId_Ping) {
-		return false
-	}
-	// 忽略认证action
-	if !d && (actionId == gatewayv1.ActionId_AuthResp || actionId == gatewayv1.ActionId_Pong) {
-		return false
-	}
-
-	return true
+func (e *Event) cryptEnable() bool {
+	return e.crypto != nil
 }
 
-func (e *Event) decrypt(c socket.Conn, actionId gatewayv1.ActionId, iv []byte, pkg []byte) ([]byte, error) {
-	if !e.cryptEnable(actionId, true) || len(pkg) == 0 {
+func (e *Event) decrypt(c socket.Conn, pkg []byte) ([]byte, error) {
+	if !e.cryptEnable() || len(pkg) == 0 {
 		return pkg, nil
 	}
 	key1, ok := c.Context().GetOptional("cryptKey")
@@ -326,11 +314,17 @@ func (e *Event) decrypt(c socket.Conn, actionId gatewayv1.ActionId, iv []byte, p
 		return nil, errors.New("no key")
 	}
 	key := key1.([]byte)
+	index := len(pkg) - e.crypto.Type().IvLen()
+	iv := pkg[index:]
+	pkg = pkg[:index]
+	if len(pkg) == 0 {
+		return pkg, nil
+	}
 	return e.crypto.Decrypt(pkg, key, iv, false)
 }
 
-func (e *Event) encrypt(c socket.Conn, actionId gatewayv1.ActionId, pkg []byte) ([]byte, []byte, error) {
-	if !e.cryptEnable(actionId, false) || len(pkg) == 0 {
+func (e *Event) encrypt(c socket.Conn, pkg []byte) ([]byte, []byte, error) {
+	if !e.cryptEnable() || len(pkg) == 0 {
 		return pkg, nil, nil
 	}
 	key1, ok := c.Context().GetOptional("cryptKey")
@@ -343,7 +337,7 @@ func (e *Event) encrypt(c socket.Conn, actionId gatewayv1.ActionId, pkg []byte) 
 
 func (e *Event) gatewayWrite(c socket.Conn, action codec.Action, data []byte) error {
 	// 加密
-	encrypted, iv, err := e.encrypt(c, gatewayv1.ActionId(action.Id), data)
+	encrypted, iv, err := e.encrypt(c, data)
 	if err != nil {
 		return utils.NewWrappedError("write failed, data encrypt failed", err)
 	}
@@ -351,12 +345,12 @@ func (e *Event) gatewayWrite(c socket.Conn, action codec.Action, data []byte) er
 	gwPkg := &gatewayv1.GatewayPackage{
 		Action: uint32(action.Id),
 		Data:   encrypted,
-		Iv:     string(iv),
 	}
 	actionPkg, err := e.actionEncode(c, gwPkg)
 	if err != nil {
 		return utils.NewWrappedError("write failed, encode gateway package failed", err)
 	}
+	actionPkg = append(actionPkg, iv...)
 	// codec
 	packedPkg, err := e.codecEncode(c, actionPkg)
 	if err != nil {
@@ -392,10 +386,13 @@ func (e *Event) SendAction(c socket.Conn, a codec.Action, data codec.DataPtr) (e
 	return
 }
 
-func (e *Event) gatewayErrorResponse(c socket.Conn, actionId gatewayv1.ActionId, triggerActionId uint32) error {
-	data := &gatewayv1.GatewayErrResponse{TriggerAction: triggerActionId}
+func (e *Event) gatewayErrorResponse(c socket.Conn, stat gatewayv1.GatewayError_Status, triggerActionId uint32) error {
+	data := &gatewayv1.GatewayError{
+		Status:        stat,
+		TriggerAction: triggerActionId,
+	}
 
-	a := action.New(actionId)
+	a := action.New(gatewayv1.ActionId_GatewayErr)
 	e.log(c, "gateway response, action="+a.String(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.Uint32("triggerActionId", triggerActionId))
 	return e.SendAction(c, a, data)
 }
