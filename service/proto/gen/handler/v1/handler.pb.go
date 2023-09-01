@@ -78,6 +78,7 @@ type HandleRequest struct {
 	Id       string               `protobuf:"bytes,5,opt,name=id,proto3" json:"id,omitempty"`     // bind id
 	Type     string               `protobuf:"bytes,6,opt,name=type,proto3" json:"type,omitempty"` // bind type
 	Format   HandleRequest_Format `protobuf:"varint,7,opt,name=format,proto3,enum=handler.v1.HandleRequest_Format" json:"format,omitempty"`
+	User     *HandleRequest_User  `protobuf:"bytes,8,opt,name=user,proto3" json:"user,omitempty"`
 }
 
 func (x *HandleRequest) Reset() {
@@ -161,6 +162,13 @@ func (x *HandleRequest) GetFormat() HandleRequest_Format {
 	return HandleRequest_Proto
 }
 
+func (x *HandleRequest) GetUser() *HandleRequest_User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
 type HandleResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -224,12 +232,67 @@ func (x *HandleResponse) GetPackage() []byte {
 	return nil
 }
 
+type HandleRequest_User struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id   int64  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+}
+
+func (x *HandleRequest_User) Reset() {
+	*x = HandleRequest_User{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_handler_v1_handler_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *HandleRequest_User) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HandleRequest_User) ProtoMessage() {}
+
+func (x *HandleRequest_User) ProtoReflect() protoreflect.Message {
+	mi := &file_handler_v1_handler_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HandleRequest_User.ProtoReflect.Descriptor instead.
+func (*HandleRequest_User) Descriptor() ([]byte, []int) {
+	return file_handler_v1_handler_proto_rawDescGZIP(), []int{0, 0}
+}
+
+func (x *HandleRequest_User) GetId() int64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *HandleRequest_User) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 var File_handler_v1_handler_proto protoreflect.FileDescriptor
 
 var file_handler_v1_handler_proto_rawDesc = []byte{
 	0x0a, 0x18, 0x68, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x72, 0x2f, 0x76, 0x31, 0x2f, 0x68, 0x61, 0x6e,
 	0x64, 0x6c, 0x65, 0x72, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x0a, 0x68, 0x61, 0x6e, 0x64,
-	0x6c, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x22, 0xed, 0x01, 0x0a, 0x0d, 0x48, 0x61, 0x6e, 0x64, 0x6c,
+	0x6c, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x22, 0xcd, 0x02, 0x0a, 0x0d, 0x48, 0x61, 0x6e, 0x64, 0x6c,
 	0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x61, 0x63, 0x74, 0x69,
 	0x6f, 0x6e, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x08, 0x61, 0x63, 0x74,
 	0x69, 0x6f, 0x6e, 0x49, 0x64, 0x12, 0x18, 0x0a, 0x07, 0x70, 0x61, 0x63, 0x6b, 0x61, 0x67, 0x65,
@@ -242,7 +305,13 @@ var file_handler_v1_handler_proto_rawDesc = []byte{
 	0x06, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x18, 0x07, 0x20, 0x01, 0x28, 0x0e, 0x32, 0x20, 0x2e,
 	0x68, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x72, 0x2e, 0x76, 0x31, 0x2e, 0x48, 0x61, 0x6e, 0x64, 0x6c,
 	0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x2e, 0x46, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x52,
-	0x06, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x22, 0x1d, 0x0a, 0x06, 0x46, 0x6f, 0x72, 0x6d, 0x61,
+	0x06, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x12, 0x32, 0x0a, 0x04, 0x75, 0x73, 0x65, 0x72, 0x18,
+	0x08, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1e, 0x2e, 0x68, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x72, 0x2e,
+	0x76, 0x31, 0x2e, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x2e, 0x55, 0x73, 0x65, 0x72, 0x52, 0x04, 0x75, 0x73, 0x65, 0x72, 0x1a, 0x2a, 0x0a, 0x04, 0x55,
+	0x73, 0x65, 0x72, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x03, 0x52,
+	0x02, 0x69, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x04, 0x6e, 0x61, 0x6d, 0x65, 0x22, 0x1d, 0x0a, 0x06, 0x46, 0x6f, 0x72, 0x6d, 0x61,
 	0x74, 0x12, 0x09, 0x0a, 0x05, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x10, 0x00, 0x12, 0x08, 0x0a, 0x04,
 	0x4a, 0x73, 0x6f, 0x6e, 0x10, 0x01, 0x22, 0x68, 0x0a, 0x0e, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65,
 	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1b, 0x0a, 0x09, 0x61, 0x63, 0x74, 0x69,
@@ -283,21 +352,23 @@ func file_handler_v1_handler_proto_rawDescGZIP() []byte {
 }
 
 var file_handler_v1_handler_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_handler_v1_handler_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_handler_v1_handler_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_handler_v1_handler_proto_goTypes = []interface{}{
-	(HandleRequest_Format)(0), // 0: handler.v1.HandleRequest.Format
-	(*HandleRequest)(nil),     // 1: handler.v1.HandleRequest
-	(*HandleResponse)(nil),    // 2: handler.v1.HandleResponse
+	(HandleRequest_Format)(0),  // 0: handler.v1.HandleRequest.Format
+	(*HandleRequest)(nil),      // 1: handler.v1.HandleRequest
+	(*HandleResponse)(nil),     // 2: handler.v1.HandleResponse
+	(*HandleRequest_User)(nil), // 3: handler.v1.HandleRequest.User
 }
 var file_handler_v1_handler_proto_depIdxs = []int32{
 	0, // 0: handler.v1.HandleRequest.format:type_name -> handler.v1.HandleRequest.Format
-	1, // 1: handler.v1.HandlerService.Handle:input_type -> handler.v1.HandleRequest
-	2, // 2: handler.v1.HandlerService.Handle:output_type -> handler.v1.HandleResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 1: handler.v1.HandleRequest.user:type_name -> handler.v1.HandleRequest.User
+	1, // 2: handler.v1.HandlerService.Handle:input_type -> handler.v1.HandleRequest
+	2, // 3: handler.v1.HandlerService.Handle:output_type -> handler.v1.HandleResponse
+	3, // [3:4] is the sub-list for method output_type
+	2, // [2:3] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_handler_v1_handler_proto_init() }
@@ -330,6 +401,18 @@ func file_handler_v1_handler_proto_init() {
 				return nil
 			}
 		}
+		file_handler_v1_handler_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*HandleRequest_User); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -337,7 +420,7 @@ func file_handler_v1_handler_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_handler_v1_handler_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

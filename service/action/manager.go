@@ -177,11 +177,11 @@ func (m *Manager) Dispatch(c socket.Conn, name codec.Name, b codec.DataBuilder, 
 
 	s := m.getRandServer(actionId)
 	if s == "" {
-		err = errors.New("no action handler")
+		err = errors.New("action manager error: no action handler")
 		return
 	}
 	if m.remoteHandler == nil {
-		err = errors.New("no set remote action handler")
+		err = errors.New("action manager error: no set remote action handler")
 		return
 	}
 	respAction, respData, err = m.remoteHandler.Call(s, m.gateway.String(), name.String(), c, actionId, actionData)

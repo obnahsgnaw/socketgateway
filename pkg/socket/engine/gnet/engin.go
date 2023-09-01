@@ -92,6 +92,7 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	if c.Keepalive > 0 {
 		options = append(options, gnet.WithTCPKeepAlive(time.Duration(c.Keepalive)*time.Second))
 	}
+	options = append(options, gnet.WithReuseAddr(c.ReuseAddr))
 	return gnet.Run(e, e.addr, options...)
 }
 

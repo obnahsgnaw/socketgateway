@@ -19,6 +19,7 @@ type Config struct {
 	Keepalive uint
 	NoDelay   bool
 	Ticker    bool
+	ReuseAddr bool
 }
 
 // Server 服务

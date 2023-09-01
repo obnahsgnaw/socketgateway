@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	ErrNotAProtobufMessage = errors.New("Data builder pack failed, not a proto.Message ")
+	ErrNotAProtobufMessage = errors.New("data builder error: Data builder pack failed, not a proto.Message ")
 )
 
 type DataPtr interface{}

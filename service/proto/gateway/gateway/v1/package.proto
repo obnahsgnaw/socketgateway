@@ -5,11 +5,20 @@ package gateway.v1;
 // 网关层通用请求和响应的包， 所有协议包均需以此包结构构建
 message GatewayPackage {
   uint32 action = 1; // 协议 id
-  bytes data = 2;       // 协议数据体
-  string iv = 3;        // 数据加解密时的iv值 无加密或不需iv则为空
+  bytes data = 2;    // 协议数据体
 }
 
 // 网关层通用错误响应
-message GatewayErrResponse {
-  uint32 trigger_action = 1; // 出错的action id
+message GatewayError {
+  enum Status {
+    None = 0;
+    PackageErr = 1;      // 包解析错误
+    ActionErr = 2;       // action id 解析失败 或者 <=0
+    InternalErr = 4;     // 内部错误
+    NoActionHandler = 5; // 无处理服务 没有服务 或者不支持的action
+    DecryptErr = 6;      // 解密错误
+    NoAuth = 7;          // 未认证
+  }
+  Status status = 1;
+  uint32 trigger_action = 2; // 出错的action id
 }

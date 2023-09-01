@@ -4,11 +4,14 @@ help:
 	@echo "options and effects:"
 	@echo "    help   : Show help"
 	@echo "version options    :"
-	@echo "    major  : Generate major version number"
-	@echo "    minor  : Generate minor version number"
-	@echo "    version  : Generate auto version number"
-	@echo "    changelog: Generate change log file and modify tag"
-	@echo "    asset: Generate doc asset"
+	@echo "    major      : Generate major version number"
+	@echo "    minor      : Generate minor version number"
+	@echo "    version    : Generate auto version number"
+	@echo "    changelog  : Generate change log file and modify tag"
+	@echo "    asset      : Generate doc asset"
+	@echo "    pb         : Generate all pb and asset"
+	@echo "    handler-pb : Generate handler pb"
+	@echo "    gateway-pb : Generate gateway pb"
 
 .PHONY: test
 test:
@@ -66,7 +69,14 @@ asset:
 	@go-bindata -o=asset/asset.go -pkg=asset service/doc/html/...
 	@echo "Done"
 .PHONY: pb
-pb:
+pb:handler-pb gateway-pb asset
+.PHONY: handler-pb
+handler-pb:
 	@echo "generate proto..."
 	@cd service/proto/service && buf generate
+	@echo "Done"
+.PHONY: gateway-pb
+gateway-pb:
+	@echo "generate gateway proto..."
+	@cd service/proto/gateway && buf generate
 	@echo "Done"

@@ -30,7 +30,7 @@ func (h *RemoteHandler) Call(serverHost, gateway, format string, c socket.Conn, 
 	} else {
 		f = handlerv1.HandleRequest_Proto
 	}
-	resp, err := handler.Handle(context.Background(), &handlerv1.HandleRequest{
+	req := &handlerv1.HandleRequest{
 		ActionId: uint32(id),
 		Package:  data,
 		Gateway:  gateway,
@@ -38,7 +38,15 @@ func (h *RemoteHandler) Call(serverHost, gateway, format string, c socket.Conn, 
 		Id:       c.Context().Id().Id,
 		Type:     c.Context().Id().Type,
 		Format:   f,
-	})
+	}
+	if c.Context().Authed() {
+		u := c.Context().User()
+		req.User = &handlerv1.HandleRequest_User{
+			Id:   int64(u.Id),
+			Name: u.Name,
+		}
+	}
+	resp, err := handler.Handle(context.Background(), req)
 	if err != nil {
 		return codec.Action{}, nil, utils.NewWrappedError("handler call response failed", err)
 	}
