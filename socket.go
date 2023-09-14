@@ -206,7 +206,7 @@ func (s *Server) WithRpcServer(port int) *rpc2.Server {
 	return ss
 }
 
-func (s *Server) WithDocServer(gwPrefix string, port int) {
+func (s *Server) WithDocServer(gwPrefix func() string, port int) *DocServer {
 	config := &DocConfig{
 		id:      s.id,
 		endType: s.et,
@@ -224,6 +224,7 @@ func (s *Server) WithDocServer(gwPrefix string, port int) {
 			socketType: s.sct,
 			Path:       "/doc",
 			Title:      s.name,
+			Public:     true,
 			Provider: func() ([]byte, error) {
 				return asset.Asset("service/doc/html/gateway.html")
 			},
@@ -231,6 +232,8 @@ func (s *Server) WithDocServer(gwPrefix string, port int) {
 	}
 	s.ds = NewDocServer(s.app.ID(), config)
 	s.debug("withed gateway doc server")
+
+	return s.ds
 }
 
 func (s *Server) WatchLog(watcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)) {
@@ -316,9 +319,7 @@ func (s *Server) Run(failedCb func(error)) {
 		s.logger.Info(docDesc + "start and serving...")
 		s.debug("doc url=" + s.ds.DocUrl())
 		s.debug("index doc url=" + s.ds.IndexDocUrl())
-		if s.ds.config.gwPrefix != "" {
-			s.debug("gateway doc format=" + s.ds.GatewayDocUrlFormat())
-		}
+		s.debug("admin index doc url=" + s.ds.AdminIndexDocUrl())
 		s.ds.SyncStart(failedCb)
 	}
 	if s.rs != nil {
@@ -425,10 +426,17 @@ func (s *Server) watch(register regCenter.Register) error {
 			} else {
 				if attr == "url" {
 					s.debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
-					s.ds.Manager.Add(moduleName, keyName, "", val)
+					s.ds.Manager.Add(moduleName, keyName, "", val, nil)
 				}
 				if attr == "title" {
-					s.ds.Manager.Add(moduleName, keyName, val, "")
+					s.ds.Manager.Add(moduleName, keyName, val, "", nil)
+				}
+				if attr == "public" {
+					var public bool
+					if val == "1" {
+						public = true
+					}
+					s.ds.Manager.Add(moduleName, keyName, "", "", &public)
 				}
 			}
 		})
