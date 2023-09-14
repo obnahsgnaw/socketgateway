@@ -1,4 +1,12 @@
 
+<a name="v0.9.0"></a>
+## [v0.9.0](https://8.140.161.172/wangsb/wgateway/compare/v0.8.0...v0.9.0) (2023-09-14)
+
+### Features
+
+* **doc:** added doc public or privare diff and gw provider
+
+
 <a name="v0.8.0"></a>
 ## [v0.8.0](https://8.140.161.172/wangsb/wgateway/compare/v0.7.1...v0.8.0) (2023-09-01)
 
