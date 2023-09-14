@@ -4,7 +4,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/obnahsgnaw/application/endtype"
 	"github.com/obnahsgnaw/application/pkg/url"
-	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/application/regtype"
 	"github.com/obnahsgnaw/application/service/regCenter"
 	"github.com/obnahsgnaw/socketgateway/asset"
@@ -22,7 +21,7 @@ type DocConfig struct {
 	endType       endtype.EndType
 	Origin        url.Origin
 	RegTtl        int64
-	gwPrefix      string // api网关前缀
+	gwPrefix      func() string // api网关前缀
 	socketGateway bool
 	CacheTtl      int
 	Doc           DocItem
@@ -30,18 +29,20 @@ type DocConfig struct {
 
 type DocItem struct {
 	Title      string
+	Public     bool
 	socketType sockettype.SocketType // 通过上层应用来设置
 	Path       string
 	Provider   func() ([]byte, error)
 }
 
 type DocServer struct {
-	socketServer *Server
-	config       *DocConfig
-	engine       *gin.Engine
-	Manager      *doc.Manager
-	regInfo      *regCenter.RegInfo
-	moduleDoc    string
+	socketServer   *Server
+	config         *DocConfig
+	engine         *gin.Engine
+	Manager        *doc.Manager
+	regInfo        *regCenter.RegInfo
+	moduleDoc      string
+	adminModuleDoc string
 }
 
 // doc-index --> id-list --> key list
@@ -55,10 +56,15 @@ func NewDocServer(clusterId string, config *DocConfig) *DocServer {
 	})
 
 	s := &DocServer{
-		config:    config,
-		engine:    e,
-		Manager:   doc.NewManager(),
-		moduleDoc: "/docs/:md",
+		config:         config,
+		engine:         e,
+		Manager:        doc.NewManager(),
+		moduleDoc:      "/docs/:md",
+		adminModuleDoc: "/admin-docs/:md",
+	}
+	public := "0"
+	if config.Doc.Public {
+		public = "1"
 	}
 	s.regInfo = &regCenter.RegInfo{
 		AppId:   clusterId,
@@ -73,8 +79,9 @@ func NewDocServer(clusterId string, config *DocConfig) *DocServer {
 		Val:  "",
 		Ttl:  config.RegTtl,
 		Values: map[string]string{
-			"title": config.Doc.Title,
-			"url":   s.DocUrl(),
+			"title":  config.Doc.Title,
+			"url":    s.DocUrl(),
+			"public": public,
 		},
 	}
 
@@ -105,8 +112,29 @@ func (s *DocServer) initIndexRoute() {
 			gwUrls = s.Manager.GetModuleDocs("gateway")
 		}
 		c.Header("Cache-control", "private,max-age=86400")
+		urls := s.Manager.GetModuleDocs(c.Param("md"))
+		publicUrls := make(doc.ModuleDoc)
+		for k, item := range urls {
+			if item.Public {
+				publicUrls[k] = item
+			}
+		}
 		c.HTML(http.StatusOK, "index.tmpl", gin.H{
-			"prefix":  s.config.gwPrefix,
+			"prefix":  s.config.gwPrefix(),
+			"module":  c.Param("md"),
+			"gateway": gwUrls,
+			"urls":    publicUrls,
+		})
+	})
+	s.engine.GET(s.adminModuleDoc, func(c *gin.Context) {
+		var gwUrls = make(doc.ModuleDoc)
+		// 非网管模块 一直显示网关文档
+		if c.Param("md") != "gateway" {
+			gwUrls = s.Manager.GetModuleDocs("gateway")
+		}
+		c.Header("Cache-control", "private,max-age=86400")
+		c.HTML(http.StatusOK, "index.tmpl", gin.H{
+			"prefix":  s.config.gwPrefix(),
 			"module":  c.Param("md"),
 			"gateway": gwUrls,
 			"urls":    s.Manager.GetModuleDocs(c.Param("md")),
@@ -177,12 +205,12 @@ func (s *DocServer) DocUrl() string {
 	return s.config.Origin.String() + s.config.Doc.Path
 }
 
-func (s *DocServer) GatewayDocUrlFormat() string {
-	return utils.ToStr("protocol://hostname:port", s.config.gwPrefix, s.moduleDoc)
-}
-
 func (s *DocServer) IndexDocUrl() string {
 	return s.config.Origin.String() + s.moduleDoc
+}
+
+func (s *DocServer) AdminIndexDocUrl() string {
+	return s.config.Origin.String() + s.adminModuleDoc
 }
 
 func (s *DocServer) SyncStart(cb func(error)) {

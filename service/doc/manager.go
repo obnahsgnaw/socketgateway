@@ -14,8 +14,9 @@ type module string
 type key string
 type ModuleDoc map[key]*item
 type item struct {
-	Title string
-	urls  map[string]struct{}
+	Title  string
+	Public bool
+	urls   map[string]struct{}
 }
 
 func NewManager() *Manager {
@@ -24,7 +25,7 @@ func NewManager() *Manager {
 	}
 }
 
-func (m *Manager) Add(moduleName, keyName, title, url string) {
+func (m *Manager) Add(moduleName, keyName, title, url string, public *bool) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -42,10 +43,18 @@ func (m *Manager) Add(moduleName, keyName, title, url string) {
 		if url != "" {
 			m.docs[mk][k].urls[url] = struct{}{}
 		}
+		if public != nil {
+			m.docs[mk][k].Public = *public
+		}
 	} else {
+		pub := false
+		if public != nil {
+			pub = *public
+		}
 		m.docs[mk][k] = &item{
-			Title: title,
-			urls:  map[string]struct{}{url: {}},
+			Title:  title,
+			Public: pub,
+			urls:   map[string]struct{}{url: {}},
 		}
 	}
 }

@@ -26,7 +26,9 @@ func main() {
 	s := socketgateway.New(app, sockettype.TCP, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
 	s.SetSocketEngine(gnet.New())
 	s.WithRpcServer(8002)
-	s.WithDocServer("", 8003)
+	s.WithDocServer(func() string {
+		return ""
+	}, 8003)
 	s.WatchLog(func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field) {
 		log.Println(msg)
 	})
