@@ -54,7 +54,10 @@ func (m *Manager) Add(moduleName, keyName, title, url string, public *bool) {
 		m.docs[mk][k] = &item{
 			Title:  title,
 			Public: pub,
-			urls:   map[string]struct{}{url: {}},
+			urls:   map[string]struct{}{},
+		}
+		if url != "" {
+			m.docs[mk][k].urls[url] = struct{}{}
 		}
 	}
 }
