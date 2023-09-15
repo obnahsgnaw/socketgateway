@@ -206,10 +206,15 @@ func (s *Server) WithRpcServer(port int) *rpc2.Server {
 	return ss
 }
 
-func (s *Server) WithDocServer(gwPrefix func() string, port int) *DocServer {
+// WithDocServer doc server
+func (s *Server) WithDocServer(port int, docProxyPrefix string) *DocServer {
+	if docProxyPrefix != "" {
+		docProxyPrefix = "/" + strings.Trim(docProxyPrefix, "/")
+	}
 	config := &DocConfig{
-		id:      s.id,
-		endType: s.et,
+		id:       s.id,
+		endType:  s.et,
+		servType: s.st,
 		Origin: url.Origin{
 			Protocol: url.HTTP,
 			Host: url.Host{
@@ -218,17 +223,19 @@ func (s *Server) WithDocServer(gwPrefix func() string, port int) *DocServer {
 			},
 		},
 		RegTtl:        s.app.RegTtl(),
-		gwPrefix:      gwPrefix,
+		Prefix:        docProxyPrefix,
 		socketGateway: true,
 		Doc: DocItem{
 			socketType: s.sct,
-			Path:       "/doc",
+			Path:       "/docs/gateway/gateway." + s.st.String() + "doc", // the same with the socket handler
+			Prefix:     docProxyPrefix + "/docs",
 			Title:      s.name,
 			Public:     true,
 			Provider: func() ([]byte, error) {
 				return asset.Asset("service/doc/html/gateway.html")
 			},
 		},
+		debug: s.app.Debugger().Debug(),
 	}
 	s.ds = NewDocServer(s.app.ID(), config)
 	s.debug("withed gateway doc server")
@@ -319,7 +326,6 @@ func (s *Server) Run(failedCb func(error)) {
 		s.logger.Info(docDesc + "start and serving...")
 		s.debug("doc url=" + s.ds.DocUrl())
 		s.debug("index doc url=" + s.ds.IndexDocUrl())
-		s.debug("admin index doc url=" + s.ds.AdminIndexDocUrl())
 		s.ds.SyncStart(failedCb)
 	}
 	if s.rs != nil {

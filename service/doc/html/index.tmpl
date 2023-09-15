@@ -6,12 +6,13 @@
 </head>
 <body>
    {{ $m := .module }}
+   {{ $suf := .suf }}
    {{ $prefix := .prefix }}
     {{ range $k,$item := .gateway }}
-    <p><a href="{{ $prefix }}/docs/gateway/{{ $k }}">{{ $item.Title }}</a></p>
+    <p><a href="gateway/{{ $k }}{{$suf}}">{{ $item.Title }}</a></p>
     {{ end }}
     {{ range $k,$item := .urls }}
-    <p><a href="{{ $prefix }}/docs/{{ $m }}/{{ $k }}">{{ $item.Title }}</a></p>
+    <p><a href="{{ $m }}/{{ $k }}{{$suf}}">{{ $item.Title }}</a></p>
     {{ end }}
 </body>
 </html>
