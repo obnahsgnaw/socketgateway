@@ -5,8 +5,8 @@ import (
 	"errors"
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/service/codec"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
+	"github.com/obnahsgnaw/socketutil/codec"
 )
 
 type MessageService struct {
