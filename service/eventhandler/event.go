@@ -8,8 +8,8 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/action"
-	"github.com/obnahsgnaw/socketgateway/service/codec"
 	gatewayv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/gateway/v1"
+	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc/codes"
@@ -41,9 +41,13 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 		st:  st,
 	}
 	if s.st == sockettype.WSS {
-		s.codecProvider = codec.WssProvider()
+		s.codecProvider = codec.WssDefaultProvider(func() codec.DataPtr {
+			return &gatewayv1.GatewayPackage{}
+		})
 	} else {
-		s.codecProvider = codec.DefaultProvider()
+		s.codecProvider = codec.TcpDefaultProvider(func() codec.DataPtr {
+			return &gatewayv1.GatewayPackage{}
+		})
 	}
 	s.codedProvider = codec.NewDbp()
 	s.With(options...)
@@ -272,9 +276,13 @@ func (e *Event) codecEncode(c socket.Conn, pkg []byte) ([]byte, error) {
 }
 
 func (e *Event) actionDecode(builder codec.PkgBuilder, pkg []byte) (*gatewayv1.GatewayPackage, error) {
-	p, err := builder.Unpack(pkg)
+	p1, err := builder.Unpack(pkg)
 	if err != nil {
 		return nil, err
+	}
+	p, ok := p1.(*gatewayv1.GatewayPackage)
+	if !ok {
+		return nil, errors.New("data builder unpack not gateway package")
 	}
 	if p.Action <= 0 {
 		return nil, errors.New("action id zero")

@@ -1,8 +1,8 @@
 package socketgateway
 
 import (
-	"github.com/obnahsgnaw/socketgateway/service/codec"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
+	"github.com/obnahsgnaw/socketutil/codec"
 	"time"
 )
 

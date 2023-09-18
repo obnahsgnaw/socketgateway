@@ -6,7 +6,7 @@ import (
 	"github.com/obnahsgnaw/rpc/pkg/rpc"
 	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/service/codec"
+	"github.com/obnahsgnaw/socketutil/codec"
 )
 
 type RemoteHandler struct {

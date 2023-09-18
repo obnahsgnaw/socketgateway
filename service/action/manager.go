@@ -5,7 +5,7 @@ import (
 	"github.com/obnahsgnaw/application/pkg/url"
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/service/codec"
+	"github.com/obnahsgnaw/socketutil/codec"
 	"github.com/panjf2000/gnet/v2/pkg/pool/goroutine"
 	"sync"
 )

@@ -2,7 +2,7 @@ package action
 
 import (
 	"github.com/obnahsgnaw/application/pkg/url"
-	"github.com/obnahsgnaw/socketgateway/service/codec"
+	"github.com/obnahsgnaw/socketutil/codec"
 )
 
 type Option func(s *Manager)

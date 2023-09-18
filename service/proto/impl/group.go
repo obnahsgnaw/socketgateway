@@ -5,8 +5,8 @@ import (
 	"errors"
 	groupv1 "github.com/obnahsgnaw/socketapi/gen/group/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/service/codec"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
+	"github.com/obnahsgnaw/socketutil/codec"
 )
 
 type GroupService struct {

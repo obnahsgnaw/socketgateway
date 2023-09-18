@@ -1,7 +1,7 @@
 package eventhandler
 
 import (
-	"github.com/obnahsgnaw/socketgateway/service/codec"
+	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"time"
 )
