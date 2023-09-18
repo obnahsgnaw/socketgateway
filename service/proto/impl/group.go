@@ -3,10 +3,10 @@ package impl
 import (
 	"context"
 	"errors"
+	groupv1 "github.com/obnahsgnaw/socketapi/gen/group/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/codec"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
-	groupv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/group/v1"
 )
 
 type GroupService struct {

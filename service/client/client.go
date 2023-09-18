@@ -88,7 +88,6 @@ func (c *Client) Pack(action codec.Action, data codec.DataPtr) ([]byte, error) {
 	b1, err := c.pgb.Pack(&gatewayv1.GatewayPackage{
 		Action: uint32(action.Id),
 		Data:   b,
-		Iv:     "",
 	})
 	if err != nil {
 		return nil, utils.NewWrappedError("send action["+action.Name+"] failed,pack gateway package failed", err)

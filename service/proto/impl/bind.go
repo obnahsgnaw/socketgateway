@@ -3,8 +3,8 @@ package impl
 import (
 	"context"
 	"errors"
+	bindv1 "github.com/obnahsgnaw/socketapi/gen/bind/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	bindv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/bind/v1"
 )
 
 type BindService struct {
