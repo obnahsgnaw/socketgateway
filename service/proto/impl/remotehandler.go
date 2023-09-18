@@ -4,9 +4,9 @@ import (
 	"context"
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/rpc/pkg/rpc"
+	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/codec"
-	handlerv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/handler/v1"
 )
 
 type RemoteHandler struct {

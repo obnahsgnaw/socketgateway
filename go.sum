@@ -64,6 +64,8 @@ github.com/obnahsgnaw/application v0.14.0 h1:s2pHrz9ZfPnyfK3S7ovoipJHXUGk+jixVqC
 github.com/obnahsgnaw/application v0.14.0/go.mod h1:MZ8r+NHF+4QiLLK/AFVZRqwX5grXzclApLLs4vTYz90=
 github.com/obnahsgnaw/rpc v0.4.0 h1:3r4+5LmHGtqU7BFEoTk/bHrTrkrJL2QmD0zeeB8SIWY=
 github.com/obnahsgnaw/rpc v0.4.0/go.mod h1:TYtsMN99+20y3P643iSBeDz1lYQbQEqB3vqryZflcig=
+github.com/obnahsgnaw/socketapi v0.1.0 h1:o6E0gUmeDuQVM47LiHeL3HWPdR9ftxseikiCxNxKn+k=
+github.com/obnahsgnaw/socketapi v0.1.0/go.mod h1:4nnuHzzHpuO6fPOSl9qY1fnrD/UWubc3kp7ReEIpNtM=
 github.com/panjf2000/ants/v2 v2.7.1 h1:qBy5lfSdbxvrR0yUnZfaEDjf0FlCw4ufsbcsxmE7r+M=
 github.com/panjf2000/ants/v2 v2.7.1/go.mod h1:KIBmYG9QQX5U2qzFP/yQJaq/nSb6rahS9iEHkrCMgM8=
 github.com/panjf2000/gnet/v2 v2.2.9 h1:rmIkaXYtMb2dkgaedojb1uEM2NgVM0jdrnmSNq7F/Vk=
