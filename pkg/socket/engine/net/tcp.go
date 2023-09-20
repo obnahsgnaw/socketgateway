@@ -58,7 +58,9 @@ func (h *tcpEngineHandler) handConn(c *Conn) {
 		if err != nil {
 			break
 		}
-		c.pkg = append(c.pkg, buf[:n])
-		h.e.event.OnTraffic(h.e.server, c)
+		if n > 0 {
+			c.pkg = append(c.pkg, buf[:n])
+			h.e.event.OnTraffic(h.e.server, c)
+		}
 	}
 }

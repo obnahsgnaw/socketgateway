@@ -22,7 +22,6 @@ type Engine struct {
 	index       int64
 	connections sync.Map
 	stopped     bool
-	ws          bool
 	t           sockettype.SocketType
 }
 
@@ -39,11 +38,6 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	e.server = s
 	e.event = ee
 	e.ctx, e.cancel = context.WithCancel(ctx)
-	e.ws = t == sockettype.WSS
-	// TODO wss
-	if e.ws {
-		return errors.New("socket engine error: not support now")
-	}
 	e.addr = t.String() + "://:" + strconv.Itoa(p)
 	var handler engineHandler
 
@@ -52,7 +46,7 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	} else if t.IsUdp() {
 		handler = newUdpEngineHandler(e, t.String(), p)
 	} else if t.IsWss() {
-		// TODO
+		handler = newWssEngineHandler(e, p)
 	} else {
 		return errors.New("socket engine error: not support now")
 	}

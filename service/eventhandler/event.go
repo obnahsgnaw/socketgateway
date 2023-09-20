@@ -169,7 +169,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		}
 
 		// 分发action 获得响应信息
-		respAction, respData, err := e.am.Dispatch(c, coderName, e.DataBuilder(c), codec.ActionId(gwPkg.Action), decryptedData)
+		respAction, respData, err := e.am.Dispatch(c, coderName, e.DataBuilder(c), gwPkg.Action, decryptedData)
 		if err != nil {
 			if st, ok := status.FromError(err); ok {
 				if st.Code() == codes.NotFound {
