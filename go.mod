@@ -5,10 +5,11 @@ go 1.19
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/gobwas/ws v1.2.1
+	github.com/gorilla/websocket v1.5.0
 	github.com/obnahsgnaw/application v0.14.0
 	github.com/obnahsgnaw/rpc v0.4.0
 	github.com/obnahsgnaw/socketapi v0.1.0
-	github.com/obnahsgnaw/socketutil v0.2.0
+	github.com/obnahsgnaw/socketutil v0.3.0
 	github.com/panjf2000/gnet/v2 v2.2.9
 	go.uber.org/zap v1.23.0
 	google.golang.org/grpc v1.55.0
