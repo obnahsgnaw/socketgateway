@@ -1,4 +1,13 @@
 
+<a name="v0.12.0"></a>
+## [v0.12.0](https://8.140.161.172/wangsb/wgateway/compare/v0.11.0...v0.12.0) (2023-09-20)
+
+### Features
+
+* **pkg:** added net/websocket
+* **pkg:** added net udp
+
+
 <a name="v0.11.0"></a>
 ## [v0.11.0](https://8.140.161.172/wangsb/wgateway/compare/v0.10.0...v0.11.0) (2023-09-18)
 
