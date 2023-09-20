@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
-	"net"
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -46,12 +44,19 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	if e.ws {
 		return errors.New("socket engine error: not support now")
 	}
-	// TODO udp
 	e.addr = t.String() + "://:" + strconv.Itoa(p)
-	network, addr := parseProtoAddr(e.addr)
-	network = strings.ToLower(network)
-	listener, err := net.Listen(network, addr)
-	if err != nil {
+	var handler engineHandler
+
+	if t.IsTcp() {
+		handler = newTcpEngineHandler(e, e.addr)
+	} else if t.IsUdp() {
+		handler = newUdpEngineHandler(e, t.String(), p)
+	} else if t.IsWss() {
+		// TODO
+	} else {
+		return errors.New("socket engine error: not support now")
+	}
+	if err = handler.Init(); err != nil {
 		return err
 	}
 	e.event.OnBoot(e.server)
@@ -70,20 +75,7 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 		}(e.ctx)
 	}
 
-	for {
-		conn, err := listener.Accept()
-		if err == nil {
-			atomic.AddInt64(&e.index, 1)
-			fd := atomic.LoadInt64(&e.index)
-			c := newConn(int(fd), conn, socket.NewContext())
-			e.connections.Store(fd, c)
-			e.event.OnOpen(e.server, c)
-			go e.handConn(c)
-		}
-		if e.stopped {
-			break
-		}
-	}
+	handler.Run()
 
 	e.event.OnShutdown(e.server)
 	return nil
@@ -94,19 +86,18 @@ func (e *Engine) Stop() error {
 	return nil
 }
 
-func (e *Engine) handConn(c *Conn) {
-	defer func() {
-		c.Close()
-		e.event.OnClose(e.server, c, errors.New("close by peer"))
-		e.connections.Delete(c.fd)
-	}()
-	var buf [1024]byte
-	for {
-		n, err := c.raw.Read(buf[:])
-		if err != nil {
-			break
-		}
-		c.pkg = append(c.pkg, buf[:n])
-		e.event.OnTraffic(e.server, c)
+func parseProtoAddr(addr string) (network, address string) {
+	network = "tcp"
+	address = strings.ToLower(addr)
+	if strings.Contains(address, "://") {
+		pair := strings.Split(address, "://")
+		network = pair[0]
+		address = pair[1]
 	}
+	return
+}
+
+type engineHandler interface {
+	Init() error
+	Run()
 }
