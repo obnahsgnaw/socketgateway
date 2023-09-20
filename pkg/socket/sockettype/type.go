@@ -17,3 +17,15 @@ const (
 	UDP6 SocketType = "udp6"
 	WSS  SocketType = "wss"
 )
+
+func (s SocketType) IsTcp() bool {
+	return s == TCP || s == TCP4 || s == TCP6
+}
+
+func (s SocketType) IsUdp() bool {
+	return s == UDP || s == UDP4 || s == UDP6
+}
+
+func (s SocketType) IsWss() bool {
+	return s == WSS
+}

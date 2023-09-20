@@ -8,6 +8,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,11 +42,14 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	e.event = ee
 	e.ctx, e.cancel = context.WithCancel(ctx)
 	e.ws = t == sockettype.WSS
+	// TODO wss
 	if e.ws {
 		return errors.New("socket engine error: not support now")
 	}
+	// TODO udp
 	e.addr = t.String() + "://:" + strconv.Itoa(p)
 	network, addr := parseProtoAddr(e.addr)
+	network = strings.ToLower(network)
 	listener, err := net.Listen(network, addr)
 	if err != nil {
 		return err
