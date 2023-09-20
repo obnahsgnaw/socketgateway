@@ -7,6 +7,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/panjf2000/gnet/v2"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -52,8 +53,16 @@ func (e *Engine) OnClose(c gnet.Conn, err error) (action gnet.Action) {
 }
 
 func (e *Engine) OnTraffic(c gnet.Conn) (action gnet.Action) {
-	c1, _ := e.connections.Load(c.Fd())
-	c2 := c1.(*Conn)
+	var c2 *Conn
+
+	if e.server.Type().IsUdp() {
+		connCtx := socket.NewContext()
+		c.SetContext(connCtx)
+		c2 = newConn(c, connCtx)
+	} else {
+		c1, _ := e.connections.Load(c.Fd())
+		c2 = c1.(*Conn)
+	}
 	c2.Context().Active()
 	if e.ws && !c2.Context().Upgraded() {
 		if _, err := ws.Upgrade(c); err != nil {
@@ -80,7 +89,11 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	e.event = ee
 	e.ctx = ctx
 	e.ws = t == sockettype.WSS
-	e.addr = "tcp://:" + strconv.Itoa(p)
+	if strings.Contains(t.String(), "udp") {
+		e.addr = "udp://:" + strconv.Itoa(p)
+	} else {
+		e.addr = "tcp://:" + strconv.Itoa(p)
+	}
 	var options []gnet.Option
 	options = append(options, gnet.WithMulticore(c.MultiCore))
 	options = append(options, gnet.WithTicker(c.Ticker))

@@ -40,14 +40,28 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 		am:  m,
 		st:  st,
 	}
-	if s.st == sockettype.WSS {
-		s.codecProvider = codec.WssDefaultProvider(func() codec.DataPtr {
+	toData := func(p *codec.PKG) codec.DataPtr {
+		if p == nil {
 			return &gatewayv1.GatewayPackage{}
-		})
+		}
+		return &gatewayv1.GatewayPackage{
+			Action: p.Action.Val(),
+			Data:   p.Data,
+		}
+	}
+	toPkg := func(d codec.DataPtr) *codec.PKG {
+		d1 := d.(*gatewayv1.GatewayPackage)
+		return &codec.PKG{
+			Action: codec.ActionId(d1.Action),
+			Data:   d1.Data,
+		}
+	}
+	if s.st.IsTcp() {
+		s.codecProvider = codec.TcpDefaultProvider(toData, toPkg)
+	} else if s.st.IsUdp() {
+		s.codecProvider = codec.UdpDefaultProvider(toData, toPkg)
 	} else {
-		s.codecProvider = codec.TcpDefaultProvider(func() codec.DataPtr {
-			return &gatewayv1.GatewayPackage{}
-		})
+		s.codecProvider = codec.WssDefaultProvider(toData, toPkg)
 	}
 	s.codedProvider = codec.NewDbp()
 	s.With(options...)
@@ -101,6 +115,9 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 			e.logger.Error("on traffic err=" + err + ", stack=" + stack)
 		}
 	})
+	if e.st.IsUdp() && e.crypto != nil {
+		c.Context().SetOptional("cryptKey", e.staticEsKey)
+	}
 	// 读取数据
 	rawPkg, err := c.Read()
 	if err != nil {
@@ -133,10 +150,10 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 			return
 		}
 		// 获取action
-		rqAction, ok := e.am.GetAction(codec.ActionId(gwPkg.Action))
+		rqAction, ok := e.am.GetAction(gwPkg.Action)
 		if !ok {
-			e.log(c, "handler not found, action="+gwPkg.String(), zapcore.ErrorLevel, zap.Uint32("action", gwPkg.Action))
-			if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_NoActionHandler, gwPkg.Action); err != nil {
+			e.log(c, "handler not found, action="+(gwPkg.Action.String()), zapcore.ErrorLevel, zap.Uint32("action", gwPkg.Action.Val()))
+			if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_NoActionHandler, gwPkg.Action.Val()); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -145,7 +162,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		// 认证检查， 排除认证相关action
 		if !e.authCheck(c, gatewayv1.ActionId(gwPkg.Action)) {
 			e.log(c, "handle failed, no auth", zapcore.ErrorLevel)
-			if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_NoAuth, gwPkg.Action); err != nil {
+			if err = e.gatewayErrorResponse(c, gatewayv1.GatewayError_NoAuth, gwPkg.Action.Val()); err != nil {
 				e.log(c, err.Error(), zapcore.ErrorLevel)
 			}
 			return
@@ -275,23 +292,19 @@ func (e *Event) codecEncode(c socket.Conn, pkg []byte) ([]byte, error) {
 	return unpacker.Marshal(pkg)
 }
 
-func (e *Event) actionDecode(builder codec.PkgBuilder, pkg []byte) (*gatewayv1.GatewayPackage, error) {
-	p1, err := builder.Unpack(pkg)
+func (e *Event) actionDecode(builder codec.PkgBuilder, pkg []byte) (*codec.PKG, error) {
+	p, err := builder.Unpack(pkg)
 	if err != nil {
 		return nil, err
 	}
-	p, ok := p1.(*gatewayv1.GatewayPackage)
-	if !ok {
-		return nil, errors.New("data builder unpack not gateway package")
-	}
-	if p.Action <= 0 {
+	if p.Action.Val() <= 0 {
 		return nil, errors.New("action id zero")
 	}
 
 	return p, nil
 }
 
-func (e *Event) actionEncode(c socket.Conn, gwPkg *gatewayv1.GatewayPackage) ([]byte, error) {
+func (e *Event) actionEncode(c socket.Conn, gwPkg *codec.PKG) ([]byte, error) {
 	b, _ := c.Context().GetOptional("pkgBuilder")
 	builder := b.(codec.PkgBuilder)
 	return builder.Pack(gwPkg)
@@ -350,8 +363,8 @@ func (e *Event) gatewayWrite(c socket.Conn, action codec.Action, data []byte) er
 		return utils.NewWrappedError("write failed, data encrypt failed", err)
 	}
 	// gateway包
-	gwPkg := &gatewayv1.GatewayPackage{
-		Action: uint32(action.Id),
+	gwPkg := &codec.PKG{
+		Action: action.Id,
 		Data:   encrypted,
 	}
 	actionPkg, err := e.actionEncode(c, gwPkg)
