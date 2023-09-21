@@ -1,7 +1,9 @@
 package eventhandler
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/socketgateway/pkg/group"
@@ -130,6 +132,9 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	}
 	// 获取设置 拆包器、action解码器、数据解码器
 	coderName, unpacker, pkgBuilder, initdPkg := e.initCodec(c, rawPkg)
+	if len(initdPkg) == 0 {
+		return
+	}
 	// 拆包
 	err = e.codecDecode(c, unpacker, initdPkg, func(packedPkg []byte) {
 		e.log(c, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
@@ -260,6 +265,12 @@ func (e *Event) initCodec(c socket.Conn, pkg []byte) (coderName codec.Name, unpa
 		coderName = n.(codec.Name)
 		initdPkg = pkg
 	} else {
+		// 处理proxy
+		pkg = e.initProxy(pkg)
+		if len(pkg) == 0 {
+			initdPkg = nil
+			return
+		}
 		coderName, unpacker, pkgBuilder, initdPkg = e.codecProvider(pkg)
 		c.Context().SetOptional("codec", unpacker)
 		c.Context().SetOptional("pkgBuilder", pkgBuilder)
@@ -269,6 +280,34 @@ func (e *Event) initCodec(c socket.Conn, pkg []byte) (coderName codec.Name, unpa
 	}
 
 	return
+}
+
+// proxy protocol v1: PROXY TCP4 202.112.144.236 10.210.12.10 5678 80\r\n
+// proxy protocol v2: [13 10 13 10 0 13 10 81 85 73 84 10 33 17 0 12 127 0 0 1 127 0 0 1 245 207 115 68]
+// 12字节固定头+2字节+2字节长度值+长度内容， 即 16字节+15，16字节存储的长度
+func (e *Event) initProxy(pkg []byte) []byte {
+	if bytes.HasPrefix(pkg, []byte("PROXY")) {
+		//v1
+		if bytes.HasSuffix(pkg, []byte("\r\n")) {
+			return nil
+		} else {
+			p1 := bytes.Split(pkg, []byte("\r\n"))
+			return p1[1]
+		}
+	}
+	v2 := []byte{0x0d, 0x0a, 0x0d, 0x0a, 0x00, 0x0d, 0x0a, 0x51, 0x55, 0x49, 0x54, 0x0a}
+
+	if bytes.HasPrefix(pkg, v2) {
+		l := pkg[14:16]
+		ll := int(16 + binary.BigEndian.Uint16(l))
+		if ll == len(pkg) {
+			return nil
+		} else {
+			return pkg[ll:]
+		}
+	}
+
+	return pkg
 }
 
 func (e *Event) DataBuilder(c socket.Conn) codec.DataBuilder {
