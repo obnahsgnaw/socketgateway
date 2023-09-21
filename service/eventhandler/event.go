@@ -97,8 +97,12 @@ func (e *Event) OnClose(s *socket.Server, c socket.Conn, err error) {
 	if err != nil {
 		reason = err.Error()
 	} else {
-		r, _ := c.Context().GetOptional("close_reason")
-		reason = r.(string)
+		r, ok := c.Context().GetOptional("close_reason")
+		if ok {
+			reason = r.(string)
+		} else {
+			reason = "unknown"
+		}
 	}
 	e.log(c, "Disconnected, reason="+reason, zapcore.InfoLevel)
 	e.am.HandleClose(c)
