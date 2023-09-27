@@ -158,6 +158,7 @@ func (s *DocServer) docHd(c *gin.Context) {
 		_, _ = c.Writer.Write(tmpl)
 	}
 }
+
 func (s *DocServer) initDocRoute() {
 	s.engine.GET(s.config.Doc.Path, s.docHd)
 	if s.config.Doc.Prefix != "" {
@@ -217,6 +218,10 @@ func (s *DocServer) DocUrl() string {
 
 func (s *DocServer) IndexDocUrl() string {
 	return s.config.Origin.String() + s.moduleDoc
+}
+
+func (s *DocServer) ModuleDocUrl(module string) string {
+	return s.config.Origin.String() + strings.Replace(s.moduleDoc, ":md", module, 1)
 }
 
 func (s *DocServer) SyncStart(cb func(error)) {
