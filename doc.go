@@ -221,7 +221,7 @@ func (s *DocServer) IndexDocUrl() string {
 }
 
 func (s *DocServer) PrefixedModuleDocUrl(module string) string {
-	return s.config.Origin.String() + s.config.Doc.Prefix + "/" + strings.TrimLeft(strings.Replace(s.moduleDoc, ":md", module, 1), "/")
+	return s.config.Origin.String() + s.config.Prefix + "/" + strings.TrimLeft(strings.Replace(s.moduleDoc, ":md", module, 1), "/")
 }
 
 func (s *DocServer) ModuleDocUrl(module string) string {
