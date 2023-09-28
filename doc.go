@@ -115,11 +115,11 @@ func (s *DocServer) initIndexRoute() {
 		var gwUrls = make(doc.ModuleDoc)
 		// 非网管模块 一直显示网关文档
 		if c.Param("md") != "gateway" {
-			gwUrls = s.Manager.GetModuleDocs("gateway")
+			gwUrls, _ = s.Manager.GetModuleDocs("gateway")
 		}
 		admin := c.Query("admin") == "cptbtptp"
 		c.Header("Cache-control", "private,max-age=86400")
-		urls := s.Manager.GetModuleDocs(c.Param("md"))
+		urls, title := s.Manager.GetModuleDocs(c.Param("md"))
 		publicUrls := make(doc.ModuleDoc)
 		if admin {
 			publicUrls = urls
@@ -132,6 +132,7 @@ func (s *DocServer) initIndexRoute() {
 		}
 		c.HTML(http.StatusOK, "index.tmpl", gin.H{
 			"module":  c.Param("md"),
+			"title":   title,
 			"gateway": gwUrls,
 			"urls":    publicUrls,
 			"suf":     "." + s.config.servType.String() + "doc",
