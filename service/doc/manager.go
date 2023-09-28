@@ -85,13 +85,15 @@ func (m *Manager) Remove(moduleName, keyName, url string) {
 	}
 }
 
-func (m *Manager) GetModuleDocs(moduleKey string) ModuleDoc {
+func (m *Manager) GetModuleDocs(moduleKey string) (ModuleDoc, string) {
 	mk := module(moduleKey)
 	doc := make(ModuleDoc)
+	title := moduleKey
 	if _, ok := m.docs[mk]; ok {
 		doc = m.docs[mk].Doc
+		title = m.docs[mk].Name
 	}
-	return doc
+	return doc, title
 }
 
 func (m *Manager) GetKeyDocs(moduleName, keyName string) (docs []string) {

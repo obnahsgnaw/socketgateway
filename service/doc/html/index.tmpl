@@ -6,13 +6,15 @@
 </head>
 <body>
    {{ $m := .module }}
+   {{ $title := .title }}
    {{ $suf := .suf }}
    {{ $prefix := .prefix }}
-    {{ range $k,$item := .gateway }}
-    <p><a href="gateway/{{ $k }}{{$suf}}">{{ $item.Title }}</a></p>
-    {{ end }}
-    {{ range $k,$item := .urls }}
-    <p><a href="{{ $m }}/{{ $k }}{{$suf}}">{{ $item.Title }}</a></p>
-    {{ end }}
+   <h3>Protocol Document: {{ $title }}</h3>
+   {{ range $k,$item := .gateway }}
+   <p><a style="display: inline-block;font-size: 18px;-height: 18px;padding: 5px 5px;text-decoration: none;color: #03a9f4;" href="gateway/{{ $k }}{{$suf}}">{{ $item.Title }}</a></p>
+   {{ end }}
+   {{ range $k,$item := .urls }}
+   <p><a style="display: inline-block;font-size: 18px;-height: 18px;padding: 5px 5px;text-decoration: none;color: #03a9f4;" href="{{ $m }}/{{ $k }}{{$suf}}">{{ $item.Title }}</a></p>
+   {{ end }}
 </body>
 </html>
