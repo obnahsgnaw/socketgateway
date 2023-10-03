@@ -54,12 +54,13 @@ type Server struct {
 	ds              *DocServer
 	logger          *zap.Logger
 	handlerRegInfo  *regCenter.RegInfo
-	err             error
+	errs            []error
 	poll            bool
 	regEnable       bool
+	routeDebug      bool
+	reuseAddr       bool
 	keepalive       uint
 	tickInterval    time.Duration
-	reuseAddr       bool
 	authAddress     string
 	crypto          eventhandler.Cryptor
 	noAuthStaticKey []byte
@@ -95,6 +96,7 @@ func st2hdt(sst servertype.ServerType) servertype.ServerType {
 }
 
 func New(app *application.Application, st sockettype.SocketType, et endtype.EndType, host url.Host, options ...Option) *Server {
+	var err error
 	s := &Server{
 		id:   "gateway-gateway",
 		name: "gateway",
@@ -105,7 +107,11 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 		app:  app,
 		m:    action.NewManager(),
 	}
-	s.logger, s.err = logger.New(utils.ToStr("Soc[", et.String(), "-", st.String(), "-gateway]"), app.LogConfig(), app.Debugger().Debug())
+	if s.st == "" {
+		s.addErr(errors.New(s.msg("type not support")))
+	}
+	s.logger, err = logger.New(utils.ToStr("Soc[", et.String(), "][", st.String(), "-gateway]"), app.LogConfig(), app.Debugger().Debug())
+	s.addErr(err)
 	s.e = eventhandler.New(app.Context(), s.m, st, eventhandler.Logger(s.logger))
 	s.regInfo = &regCenter.RegInfo{
 		AppId:   s.app.ID(),
@@ -201,7 +207,7 @@ func (s *Server) WithRpcServer(port int) *rpc2.Server {
 	s.m.With(action.Gateway(ss.Host()))
 	s.m.With(action.RtHandler(impl.NewRemoteHandler()))
 	s.rs = ss
-	s.debug("withed gateway rpc server")
+	s.debug("rpc server enabled")
 
 	return ss
 }
@@ -235,10 +241,10 @@ func (s *Server) WithDocServer(port int, docProxyPrefix string) *DocServer {
 				return asset.Asset("service/doc/html/gateway.html")
 			},
 		},
-		debug: s.app.Debugger().Debug(),
+		debug: s.routeDebug,
 	}
 	s.ds = NewDocServer(s.app.ID(), config)
-	s.debug("withed gateway doc server")
+	s.debug("doc server enabled")
 
 	return s.ds
 }
@@ -268,18 +274,17 @@ func (s *Server) Rpc() *rpc2.Server {
 }
 
 func (s *Server) Release() {
-	if s.RegEnabled() {
-		s.debug("unregister soc")
+	if s.RegEnabled() && s.app.Register() != nil {
 		_ = s.app.DoUnregister(s.regInfo)
 	}
-	s.debug("unregister doc")
-	_ = s.app.DoUnregister(s.ds.regInfo)
+	if s.ds != nil && s.app.Register() != nil {
+		_ = s.app.DoUnregister(s.ds.regInfo)
+	}
 	if s.rs != nil {
-		s.debug("release rpc server")
 		s.rs.Release()
 	}
-	s.debug("release logger")
 	_ = s.logger.Sync()
+	s.debug("released")
 }
 
 func (s *Server) SetSocketEngine(engine socket.Engine) {
@@ -287,14 +292,11 @@ func (s *Server) SetSocketEngine(engine socket.Engine) {
 }
 
 func (s *Server) Run(failedCb func(error)) {
-	if s.st == "" {
-		failedCb(errors.New(s.msg("type not support")))
+	if s.errs != nil {
+		failedCb(s.errs[0])
 		return
 	}
-	if s.err != nil {
-		failedCb(s.err)
-		return
-	}
+	s.debug("start running...")
 	if s.se == nil {
 		s.se = net.New()
 	}
@@ -308,21 +310,21 @@ func (s *Server) Run(failedCb func(error)) {
 	if s.app.Register() != nil {
 		if s.RegEnabled() {
 			if err := s.app.DoRegister(s.regInfo); err != nil {
-				failedCb(utils.NewWrappedError(s.msg("register soc failed"), err))
+				failedCb(s.socketGwError(s.msg("register soc failed"), err))
 			}
 		}
 		if err := s.app.DoRegister(s.ds.regInfo); err != nil {
-			failedCb(utils.NewWrappedError(s.msg("register doc failed"), err))
+			failedCb(s.socketGwError(s.msg("register doc failed"), err))
 		}
 		if err := s.watch(s.app.Register()); err != nil {
-			failedCb(utils.NewWrappedError(s.msg("watch failed"), err))
+			failedCb(s.socketGwError(s.msg("watch failed"), err))
 		}
 	}
 	s.defaultListen()
-	s.logger.Info(utils.ToStr(s.st.String(), "[", s.host.String(), "] start and serving..."))
+	s.logger.Info(utils.ToStr(s.st.String(), " server[", s.host.String(), "] start and serving..."))
 	s.ss.SyncStart(failedCb)
 	if s.ds != nil {
-		docDesc := utils.ToStr("doc[", s.ds.config.Origin.Host.String(), "] ")
+		docDesc := utils.ToStr("doc server[", s.ds.config.Origin.Host.String(), "] ")
 		s.logger.Info(docDesc + "start and serving...")
 		s.debug("doc url=" + s.ds.DocUrl())
 		s.debug("index doc url=" + s.ds.IndexDocUrl())
@@ -331,6 +333,10 @@ func (s *Server) Run(failedCb func(error)) {
 	if s.rs != nil {
 		s.rs.Run(failedCb)
 	}
+}
+
+func (s *Server) socketGwError(msg string, err error) error {
+	return utils.TitledError(utils.ToStr("socket gateway[", s.name, "] error"), msg, err)
 }
 
 func (s *Server) defaultListen() {
@@ -481,6 +487,12 @@ func (s *Server) watch(register regCenter.Register) error {
 func (s *Server) debug(msg string) {
 	if s.app.Debugger().Debug() {
 		s.logger.Debug(msg)
+	}
+}
+
+func (s *Server) addErr(err error) {
+	if err != nil {
+		s.errs = append(s.errs, err)
 	}
 }
 
