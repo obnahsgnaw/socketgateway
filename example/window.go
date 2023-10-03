@@ -3,8 +3,6 @@ package main
 import (
 	"github.com/obnahsgnaw/application"
 	"github.com/obnahsgnaw/application/endtype"
-	"github.com/obnahsgnaw/application/pkg/debug"
-	"github.com/obnahsgnaw/application/pkg/dynamic"
 	"github.com/obnahsgnaw/application/pkg/url"
 	"github.com/obnahsgnaw/socketgateway"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
@@ -16,10 +14,11 @@ import (
 )
 
 func main() {
-	app := application.New("dev", "dev", application.Debugger(debug.New(dynamic.NewBool(func() bool {
-		return true
-	}))))
+	app := application.New(application.NewCluster("dev", "Dev"), "socketGwDemo")
 	defer app.Release()
+	app.With(application.Debug(func() bool {
+		return true
+	}))
 	app.With(application.EtcdRegister([]string{"127.0.0.1:2379"}, time.Second*5))
 
 	s := socketgateway.New(app, sockettype.TCP, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
@@ -33,5 +32,5 @@ func main() {
 	app.Run(func(err error) {
 		panic(err)
 	})
-	log.Println("Exited")
+	app.Wait()
 }

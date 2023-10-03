@@ -14,6 +14,12 @@ func RegEnable() Option {
 	}
 }
 
+func RouteDebug() Option {
+	return func(s *Server) {
+		s.routeDebug = true
+	}
+}
+
 func Keepalive(interval uint) Option {
 	return func(s *Server) {
 		s.keepalive = interval
