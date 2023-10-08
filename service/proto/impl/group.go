@@ -11,18 +11,18 @@ import (
 
 type GroupService struct {
 	groupv1.UnimplementedGroupServiceServer
-	s *socket.Server
-	e *eventhandler.Event
+	s func() *socket.Server
+	e func() *eventhandler.Event
 }
 
-func NewGroupService(s *socket.Server, e *eventhandler.Event) *GroupService {
+func NewGroupService(s func() *socket.Server, e func() *eventhandler.Event) *GroupService {
 	return &GroupService{
 		s: s,
 		e: e,
 	}
 }
 
-func (gw *GroupService) JoinGroup(_ context.Context, in *groupv1.JoinGroupRequest) (_ *groupv1.JoinGroupResponse, err error) {
+func (gw *GroupService) JoinGroup(_ context.Context, in *groupv1.JoinGroupRequest) (resp *groupv1.JoinGroupResponse, err error) {
 	if in.GetGroup().Name == "" {
 		err = errors.New("group name is required")
 		return
@@ -35,11 +35,13 @@ func (gw *GroupService) JoinGroup(_ context.Context, in *groupv1.JoinGroupReques
 		err = errors.New("group member fd to join is required")
 		return
 	}
-	gw.s.Groups().GetGroup(in.GetGroup().GetName()).Join(int(in.Member.GetFd()), in.Member.GetId())
+	gw.s().Groups().GetGroup(in.GetGroup().GetName()).Join(int(in.Member.GetFd()), in.Member.GetId())
+
+	resp = &groupv1.JoinGroupResponse{}
 	return
 }
 
-func (gw *GroupService) LeaveGroup(_ context.Context, in *groupv1.LeaveGroupRequest) (_ *groupv1.LeaveGroupResponse, err error) {
+func (gw *GroupService) LeaveGroup(_ context.Context, in *groupv1.LeaveGroupRequest) (resp *groupv1.LeaveGroupResponse, err error) {
 	if in.GetGroup().Name == "" {
 		err = errors.New("group name is required")
 		return
@@ -48,11 +50,13 @@ func (gw *GroupService) LeaveGroup(_ context.Context, in *groupv1.LeaveGroupRequ
 		err = errors.New("group member fd is required")
 		return
 	}
-	gw.s.Groups().GetGroup(in.GetGroup().GetName()).Leave(int(in.GetFd()))
+	gw.s().Groups().GetGroup(in.GetGroup().GetName()).Leave(int(in.GetFd()))
+
+	resp = &groupv1.LeaveGroupResponse{}
 	return
 }
 
-func (gw *GroupService) BroadcastGroup(_ context.Context, in *groupv1.BroadcastGroupRequest) (_ *groupv1.BroadcastGroupResponse, err error) {
+func (gw *GroupService) BroadcastGroup(_ context.Context, in *groupv1.BroadcastGroupRequest) (resp *groupv1.BroadcastGroupResponse, err error) {
 	if in.GetGroup().Name == "" {
 		err = errors.New("group name is required")
 		return
@@ -65,9 +69,9 @@ func (gw *GroupService) BroadcastGroup(_ context.Context, in *groupv1.BroadcastG
 		err = errors.New("message is required")
 		return
 	}
-	gw.s.Groups().GetGroup(in.GetGroup().GetName()).Broadcast(func(fd int, id string) {
+	gw.s().Groups().GetGroup(in.GetGroup().GetName()).Broadcast(func(fd int, id string) {
 		if in.Id == "" || in.Id == id {
-			conn := gw.s.GetFdConn(fd)
+			conn := gw.s().GetFdConn(fd)
 
 			n, _ := conn.Context().GetOptional("coderName")
 			coderName := n.(codec.Name)
@@ -78,8 +82,10 @@ func (gw *GroupService) BroadcastGroup(_ context.Context, in *groupv1.BroadcastG
 				msg = in.JsonMessage
 			}
 
-			_ = gw.e.Send(conn, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg)
+			_ = gw.e().Send(conn, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg)
 		}
 	})
+
+	resp = &groupv1.BroadcastGroupResponse{}
 	return
 }

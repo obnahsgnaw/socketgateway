@@ -47,3 +47,11 @@ func (c *WssConn) Write(b []byte) error {
 func (c *WssConn) Close() {
 	_ = c.raw.Close()
 }
+
+func (c *WssConn) LocalAddr() net.Addr {
+	return c.raw.LocalAddr()
+}
+
+func (c *WssConn) RemoteAddr() net.Addr {
+	return c.raw.RemoteAddr()
+}

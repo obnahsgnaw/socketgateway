@@ -12,6 +12,7 @@ import (
 	"github.com/obnahsgnaw/application/service/regCenter"
 	rpc2 "github.com/obnahsgnaw/rpc"
 	bindv1 "github.com/obnahsgnaw/socketapi/gen/bind/v1"
+	connv1 "github.com/obnahsgnaw/socketapi/gen/conninfo/v1"
 	groupv1 "github.com/obnahsgnaw/socketapi/gen/group/v1"
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
 	"github.com/obnahsgnaw/socketgateway/asset"
@@ -193,15 +194,19 @@ func (s *Server) WithRpcServer(port int) *rpc2.Server {
 	}, rpc2.RegEnable(), rpc2.Parent(s))
 	ss.RegisterService(rpc2.ServiceInfo{
 		Desc: bindv1.BindService_ServiceDesc,
-		Impl: impl.NewBindService(s.ss),
+		Impl: impl.NewBindService(func() *socket.Server { return s.ss }),
+	})
+	ss.RegisterService(rpc2.ServiceInfo{
+		Desc: connv1.ConnService_ServiceDesc,
+		Impl: impl.NewConnService(func() *socket.Server { return s.ss }),
 	})
 	ss.RegisterService(rpc2.ServiceInfo{
 		Desc: groupv1.GroupService_ServiceDesc,
-		Impl: impl.NewGroupService(s.ss, s.e),
+		Impl: impl.NewGroupService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
 	})
 	ss.RegisterService(rpc2.ServiceInfo{
 		Desc: messagev1.MessageService_ServiceDesc,
-		Impl: impl.NewMessageService(s.ss, s.e),
+		Impl: impl.NewMessageService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
 	})
 	s.m.With(action.CloseAction(closeAction))
 	s.m.With(action.Gateway(ss.Host()))

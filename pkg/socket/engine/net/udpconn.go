@@ -16,6 +16,7 @@ type UdpConn struct {
 }
 
 func newUdpConn(fd int, c *net.UDPConn, addr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(udpAddr *net.UDPAddr)) *UdpConn {
+	c.LocalAddr()
 	return &UdpConn{
 		fd:          fd,
 		connContext: ctx,
@@ -51,4 +52,12 @@ func (c *UdpConn) Close() {
 	if c.closeCb != nil {
 		c.closeCb(c.addr)
 	}
+}
+
+func (c *UdpConn) LocalAddr() net.Addr {
+	return c.raw.LocalAddr()
+}
+
+func (c *UdpConn) RemoteAddr() net.Addr {
+	return c.raw.RemoteAddr()
 }
