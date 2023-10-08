@@ -38,9 +38,10 @@ type Event struct {
 
 func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, options ...Option) *Event {
 	s := &Event{
-		ctx: ctx,
-		am:  m,
-		st:  st,
+		ctx:          ctx,
+		am:           m,
+		st:           st,
+		tickHandlers: make(map[string]TickHandler),
 	}
 	toData := func(p *codec.PKG) codec.DataPtr {
 		if p == nil {
