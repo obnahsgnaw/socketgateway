@@ -48,3 +48,11 @@ func (c *Conn) Write(b []byte) error {
 func (c *Conn) Close() {
 	_ = c.raw.Close()
 }
+
+func (c *Conn) LocalAddr() net.Addr {
+	return c.raw.LocalAddr()
+}
+
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.raw.RemoteAddr()
+}

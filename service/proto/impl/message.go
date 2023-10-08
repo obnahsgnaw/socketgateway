@@ -11,31 +11,27 @@ import (
 
 type MessageService struct {
 	messagev1.UnimplementedMessageServiceServer
-	s *socket.Server
-	e *eventhandler.Event
+	s func() *socket.Server
+	e func() *eventhandler.Event
 }
 
-func NewMessageService(s *socket.Server, e *eventhandler.Event) *MessageService {
+func NewMessageService(s func() *socket.Server, e func() *eventhandler.Event) *MessageService {
 	return &MessageService{
 		s: s,
 		e: e,
 	}
 }
 
-func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessageRequest) (_ *messagev1.SendMessageResponse, err error) {
+func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessageRequest) (resp *messagev1.SendMessageResponse, err error) {
 	if in.ActionId == 0 {
 		err = errors.New("action id is required")
 		return
 	}
-	if len(in.GetPbMessage()) == 0 || len(in.GetJsonMessage()) == 0 {
-		err = errors.New("message is required")
-		return
-	}
 	var c socket.Conn
 	if in.GetFd() > 0 {
-		c = gw.s.GetFdConn(int(in.GetFd()))
+		c = gw.s().GetFdConn(int(in.GetFd()))
 	} else if in.GetId() != nil {
-		c = gw.s.GetIdConn(socket.ConnId{
+		c = gw.s().GetIdConn(socket.ConnId{
 			Id:   in.GetId().Id,
 			Type: in.GetId().Type,
 		})
@@ -52,9 +48,10 @@ func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessa
 	} else {
 		msg = in.JsonMessage
 	}
-	if err = gw.e.Send(c, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
+	if err = gw.e().Send(c, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
 		err = errors.New("send message failed, err=" + err.Error())
 	}
 
+	resp = &messagev1.SendMessageResponse{}
 	return
 }

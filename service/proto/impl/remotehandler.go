@@ -24,20 +24,13 @@ func (h *RemoteHandler) Call(serverHost, gateway, format string, c socket.Conn, 
 		return codec.Action{}, nil, utils.NewWrappedError("handler call rpc conn failed", err)
 	}
 	handler := handlerv1.NewHandlerServiceClient(cc)
-	var f handlerv1.HandleRequest_Format
-	if format == codec.Json.String() {
-		f = handlerv1.HandleRequest_Json
-	} else {
-		f = handlerv1.HandleRequest_Proto
-	}
 	req := &handlerv1.HandleRequest{
 		ActionId: uint32(id),
 		Package:  data,
 		Gateway:  gateway,
 		Fd:       int64(c.Fd()),
-		Id:       c.Context().Id().Id,
-		Type:     c.Context().Id().Type,
-		Format:   f,
+		BindIds:  c.Context().IdMap(),
+		Format:   format,
 	}
 	if c.Context().Authed() {
 		u := c.Context().User()

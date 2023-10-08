@@ -1,6 +1,7 @@
 package socket
 
 import (
+	"net"
 	"sync"
 	"time"
 )
@@ -11,13 +12,15 @@ type Conn interface {
 	Read() ([]byte, error)
 	Write([]byte) error
 	Close()
+	LocalAddr() net.Addr
+	RemoteAddr() net.Addr
 }
 
 // ConnContext 连接conn的数据绑定
 type ConnContext struct {
 	connectedAt  time.Time
 	lastActiveAt time.Time
-	id           ConnId
+	ids          map[string]ConnId // type=>ConnId
 	upgraded     bool
 	authUser     *AuthUser
 	optional     sync.Map
@@ -42,7 +45,7 @@ func NewContext() *ConnContext {
 	return &ConnContext{
 		connectedAt:  time.Now(),
 		lastActiveAt: time.Now(),
-		id:           ConnId{},
+		ids:          make(map[string]ConnId),
 		upgraded:     false,
 		authUser:     nil,
 		optional:     sync.Map{},
@@ -62,11 +65,64 @@ func (c *ConnContext) LastActiveAt() time.Time {
 }
 
 func (c *ConnContext) bind(id ConnId) {
-	c.id = id
+	if id.Type != "" && id.Id != "" {
+		c.ids[id.Type] = id
+	}
+}
+
+func (c *ConnContext) unbind(id ConnId) {
+	if id.Type != "" && id.Id != "" {
+		if _, ok := c.ids[id.Type]; ok {
+			delete(c.ids, id.Type)
+		}
+	}
+}
+
+func (c *ConnContext) bond(id ConnId) bool {
+	if id.Type != "" && id.Id != "" {
+		if _, ok := c.ids[id.Type]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (c *ConnContext) Ids() map[string]ConnId {
+	return c.ids
+}
+
+func (c *ConnContext) IdMap() map[string]string {
+	m := make(map[string]string)
+	for _, id := range c.ids {
+		m[id.Type] = id.Id
+	}
+	return m
 }
 
 func (c *ConnContext) Id() ConnId {
-	return c.id
+	if len(c.ids) >= 0 {
+		for _, id := range c.ids {
+			return id
+		}
+	}
+	return ConnId{}
+}
+
+func (c *ConnContext) RangeId(h func(id ConnId)) {
+	if len(c.ids) >= 0 && h != nil {
+		for _, id := range c.ids {
+			h(id)
+		}
+	}
+}
+
+func (c *ConnContext) TypedId(typ string) ConnId {
+	id, ok := c.ids[typ]
+	if ok {
+		return id
+	}
+	return ConnId{}
 }
 
 func (c *ConnContext) Upgrade() {

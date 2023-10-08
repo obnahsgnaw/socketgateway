@@ -100,15 +100,17 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) BindId(c Conn, id ConnId) {
-	c.Context().bind(id)
-	s.connIdBinds.Store(id.String(), c.Fd())
+	if id.Type != "" && id.Id != "" {
+		c.Context().bind(id)
+		s.connIdBinds.Store(id.String(), c.Fd())
+	}
 }
 
-func (s *Server) UnbindId(c Conn) {
-	if c.Context().Id().Id != "" {
-		s.connIdBinds.Delete(c.Context().Id().String())
+func (s *Server) UnbindId(c Conn, id ConnId) {
+	if id.Type != "" && id.Id != "" {
+		s.connIdBinds.Delete(id.String())
+		c.Context().unbind(id)
 	}
-	c.Context().bind(ConnId{})
 }
 
 func (s *Server) GetFdConn(fd int) Conn {
@@ -142,7 +144,7 @@ func (s *Server) addConn(c Conn) {
 
 func (s *Server) delConn(c Conn) {
 	s.connections.Delete(c.Fd())
-	if c.Context().Id().Id != "" {
-		s.connIdBinds.Delete(c.Context().Id().String())
-	}
+	c.Context().RangeId(func(id ConnId) {
+		s.connIdBinds.Delete(id.String())
+	})
 }

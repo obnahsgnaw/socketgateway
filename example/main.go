@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"log"
+	"time"
 )
 
 func main() {
@@ -19,6 +20,7 @@ func main() {
 	app.With(application.Debug(func() bool {
 		return true
 	}))
+	app.With(application.EtcdRegister([]string{"127.0.0.1:2379"}, time.Second*5))
 	s := socketgateway.New(app, sockettype.TCP, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
 	s.SetSocketEngine(gnet.New())
 	s.WithRpcServer(8002)
