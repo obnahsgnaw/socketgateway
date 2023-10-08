@@ -1,4 +1,12 @@
 
+<a name="v0.18.1"></a>
+## [v0.18.1](https://8.140.161.172/wangsb/wgateway/compare/v0.18.0...v0.18.1) (2023-10-08)
+
+### Bug Fixes
+
+* **event:** fix new event
+
+
 <a name="v0.18.0"></a>
 ## [v0.18.0](https://8.140.161.172/wangsb/wgateway/compare/v0.17.0...v0.18.0) (2023-10-08)
 
