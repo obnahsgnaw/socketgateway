@@ -2,9 +2,10 @@ package impl
 
 import (
 	"context"
-	"errors"
 	connv1 "github.com/obnahsgnaw/socketapi/gen/conninfo/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type ConnService struct {
@@ -20,12 +21,12 @@ func NewConnService(s func() *socket.Server) *ConnService {
 
 func (gw *ConnService) Info(_ context.Context, in *connv1.ConnInfoRequest) (resp *connv1.ConnInfoResponse, err error) {
 	if in.Fd == 0 {
-		err = errors.New("fd is required")
+		err = status.New(codes.InvalidArgument, "param:Fd is required").Err()
 		return
 	}
 	conn := gw.s().GetFdConn(int(in.Fd))
 	if conn == nil {
-		err = errors.New("fd conn not exists")
+		err = status.New(codes.NotFound, "connection not found").Err()
 		return
 	}
 

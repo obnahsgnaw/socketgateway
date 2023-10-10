@@ -2,11 +2,12 @@ package impl
 
 import (
 	"context"
-	"errors"
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
 	"github.com/obnahsgnaw/socketutil/codec"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type MessageService struct {
@@ -24,7 +25,7 @@ func NewMessageService(s func() *socket.Server, e func() *eventhandler.Event) *M
 
 func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessageRequest) (resp *messagev1.SendMessageResponse, err error) {
 	if in.ActionId == 0 {
-		err = errors.New("action id is required")
+		err = status.New(codes.InvalidArgument, "param:ActionId is required").Err()
 		return
 	}
 	var c socket.Conn
@@ -37,7 +38,7 @@ func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessa
 		})
 	}
 	if c == nil {
-		err = errors.New("fd conn not exists")
+		err = status.New(codes.NotFound, "connection not found").Err()
 		return
 	}
 	n, _ := c.Context().GetOptional("coderName")
@@ -49,7 +50,7 @@ func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessa
 		msg = in.JsonMessage
 	}
 	if err = gw.e().Send(c, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
-		err = errors.New("send message failed, err=" + err.Error())
+		err = status.New(codes.Internal, "send message failed, err="+err.Error()).Err()
 	}
 
 	resp = &messagev1.SendMessageResponse{}
