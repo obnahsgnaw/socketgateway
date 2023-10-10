@@ -7,11 +7,12 @@ import (
 )
 
 type udpEngineHandler struct {
-	e       *Engine
-	l       *net.UDPConn
-	clients map[string]int64
-	network string
-	port    int
+	e         *Engine
+	l         *net.UDPConn
+	clients   map[string]int64
+	network   string
+	port      int
+	localAddr *net.UDPAddr
 }
 
 func newUdpEngineHandler(e *Engine, network string, port int) *udpEngineHandler {
@@ -25,10 +26,11 @@ func newUdpEngineHandler(e *Engine, network string, port int) *udpEngineHandler 
 }
 
 func (h *udpEngineHandler) Init() error {
-	l, err := net.ListenUDP(h.network, &net.UDPAddr{
+	h.localAddr = &net.UDPAddr{
 		IP:   net.IPv4(0, 0, 0, 0),
 		Port: h.port,
-	})
+	}
+	l, err := net.ListenUDP(h.network, h.localAddr)
 	if err != nil {
 		return err
 	}
@@ -48,7 +50,7 @@ func (h *udpEngineHandler) Run() {
 				fd = atomic.LoadInt64(&h.e.index)
 				h.clients[addr.String()] = fd
 			}
-			c := newUdpConn(int(fd), h.l, addr, socket.NewContext(), func(udpAddr *net.UDPAddr) {
+			c := newUdpConn(int(fd), h.l, h.localAddr, addr, socket.NewContext(), func(udpAddr *net.UDPAddr) {
 				delete(h.clients, udpAddr.String())
 			})
 			c.pkg = append(c.pkg, data[:n])
