@@ -24,39 +24,39 @@ func (gw *BindService) BindId(_ context.Context, in *bindv1.BindIdRequest) (resp
 		err = status.New(codes.InvalidArgument, "param:Fd is required").Err()
 		return
 	}
-	if in.Id == "" {
+	if len(in.Ids) == 0 {
 		err = status.New(codes.InvalidArgument, "param:Id is required").Err()
 		return
 	}
-	if in.IdType == "" {
-		err = status.New(codes.InvalidArgument, "param:IdType is required").Err()
-		return
+	for _, id := range in.Ids {
+		if id.Typ == "" || id.Id == "" {
+			err = status.New(codes.InvalidArgument, "param:Id invalid, type and id value is required").Err()
+			return
+		}
 	}
 	conn := gw.s().GetFdConn(int(in.Fd))
 	if conn == nil {
 		err = status.New(codes.NotFound, "connection not found").Err()
 		return
 	}
-	gw.s().BindId(conn, socket.ConnId{
-		Id:   in.Id,
-		Type: in.IdType,
-	})
+	for _, id := range in.Ids {
+		gw.s().BindId(conn, socket.ConnId{
+			Id:   id.Id,
+			Type: id.Typ,
+		})
+	}
 	resp = &bindv1.BindIdResponse{}
 	return
 }
 
 func (gw *BindService) BindExist(_ context.Context, in *bindv1.BindExistRequest) (resp *bindv1.BindExistResponse, err error) {
-	if in.Id == "" {
-		err = status.New(codes.InvalidArgument, "param:Id is required").Err()
-		return
-	}
-	if in.IdType == "" {
-		err = status.New(codes.InvalidArgument, "param:IdType is required").Err()
+	if in.Id == nil || in.Id.Typ == "" || in.Id.Id == "" {
+		err = status.New(codes.InvalidArgument, "param:id is required").Err()
 		return
 	}
 	conn := gw.s().GetIdConn(socket.ConnId{
-		Id:   in.Id,
-		Type: in.IdType,
+		Id:   in.Id.Id,
+		Type: in.Id.Typ,
 	})
 	resp.Exist = conn == nil
 	return
@@ -67,15 +67,18 @@ func (gw *BindService) UnBindId(_ context.Context, in *bindv1.UnBindIdRequest) (
 		err = status.New(codes.InvalidArgument, "param:fd is required").Err()
 		return
 	}
+	if len(in.Types) == 0 {
+		err = status.New(codes.InvalidArgument, "param:type is required").Err()
+		return
+	}
 	conn := gw.s().GetFdConn(int(in.Fd))
 	if conn == nil {
 		err = status.New(codes.NotFound, "connection not found").Err()
 		return
 	}
-	gw.s().UnbindId(conn, socket.ConnId{
-		Id:   in.Id,
-		Type: in.IdType,
-	})
+	for _, typ := range in.Types {
+		gw.s().UnbindTypedId(conn, typ)
+	}
 	resp = &bindv1.UnBindIdResponse{}
 	return
 }
