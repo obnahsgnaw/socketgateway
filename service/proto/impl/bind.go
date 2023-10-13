@@ -58,7 +58,7 @@ func (gw *BindService) BindExist(_ context.Context, in *bindv1.BindExistRequest)
 		Id:   in.Id.Id,
 		Type: in.Id.Typ,
 	})
-	resp.Exist = conn == nil
+	resp = &bindv1.BindExistResponse{Exist: conn != nil}
 	return
 }
 
