@@ -1,4 +1,12 @@
 
+<a name="v0.20.2"></a>
+## [v0.20.2](https://8.140.161.172/wangsb/wgateway/compare/v0.20.1...v0.20.2) (2023-10-27)
+
+### Bug Fixes
+
+* **pkg net wssconn:** fix websocket write lock
+
+
 <a name="v0.20.1"></a>
 ## [v0.20.1](https://8.140.161.172/wangsb/wgateway/compare/v0.20.0...v0.20.1) (2023-10-13)
 
