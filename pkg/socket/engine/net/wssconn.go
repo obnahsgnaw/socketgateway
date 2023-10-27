@@ -5,6 +5,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"net"
+	"sync"
 )
 
 type WssConn struct {
@@ -13,6 +14,7 @@ type WssConn struct {
 	raw         *websocket.Conn
 	pkg         [][]byte
 	closeCb     func(addr *net.UDPAddr)
+	l           sync.Mutex
 }
 
 func newWssConn(fd int, c *websocket.Conn, ctx *socket.ConnContext) *WssConn {
@@ -41,6 +43,8 @@ func (c *WssConn) Read() ([]byte, error) {
 }
 
 func (c *WssConn) Write(b []byte) error {
+	c.l.Lock()
+	defer c.l.Unlock()
 	return c.raw.WriteMessage(websocket.TextMessage, b)
 }
 
