@@ -1,4 +1,16 @@
 
+<a name="v0.23.0"></a>
+## [v0.23.0](https://8.140.161.172/wangsb/wgateway/compare/v0.22.0...v0.23.0) (2023-11-16)
+
+### Features
+
+* **rpc service:** added action slb service
+
+
+<a name="v0.22.0"></a>
+## [v0.22.0](https://8.140.161.172/wangsb/wgateway/compare/v0.21.0...v0.22.0) (2023-11-16)
+
+
 <a name="v0.21.0"></a>
 ## [v0.21.0](https://8.140.161.172/wangsb/wgateway/compare/v0.20.2...v0.21.0) (2023-11-16)
 
