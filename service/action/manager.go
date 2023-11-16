@@ -7,6 +7,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"github.com/panjf2000/gnet/v2/pkg/pool/goroutine"
+	"sort"
 	"sync"
 )
 
@@ -131,6 +132,20 @@ func (m *Manager) getRandServer(actionId codec.ActionId) string {
 	}
 	return list[utils.RandInt(len(list))]
 }
+func (m *Manager) getFlbServer(fd int, actionId codec.ActionId) string {
+	list := m.getServers(actionId)
+
+	if len(list) == 0 {
+		return ""
+	}
+	if fd <= 0 {
+		return list[0]
+	}
+
+	sort.Strings(list)
+	index := fd % len(list)
+	return list[index]
+}
 
 func (m *Manager) getHandler(actionId codec.ActionId) (codec.Action, DataStructure, Handler, bool) {
 	if h, ok := m.handlers.Load(actionId); ok {
@@ -175,7 +190,7 @@ func (m *Manager) Dispatch(c socket.Conn, name codec.Name, b codec.DataBuilder, 
 		return
 	}
 
-	s := m.getRandServer(actionId)
+	s := m.getFlbServer(c.Fd(), actionId)
 	if s == "" {
 		err = errors.New("action manager error: no action handler")
 		return
