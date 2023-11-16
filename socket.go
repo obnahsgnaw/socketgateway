@@ -476,10 +476,16 @@ func (s *Server) watch(register regCenter.Register) error {
 			s.m.UnregisterRemoteAction(host)
 		} else {
 			s.debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " added"))
+			flbNum := ""
+			if strings.Contains(val, "|") {
+				valNum := strings.Split(val, "|")
+				val = valNum[0]
+				flbNum = valNum[1]
+			}
 			s.m.RegisterRemoteAction(codec.Action{
 				Id:   codec.ActionId(actionId),
 				Name: val,
-			}, host)
+			}, host, flbNum)
 		}
 	})
 	if err != nil {
