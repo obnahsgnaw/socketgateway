@@ -15,6 +15,7 @@ import (
 	connv1 "github.com/obnahsgnaw/socketapi/gen/conninfo/v1"
 	groupv1 "github.com/obnahsgnaw/socketapi/gen/group/v1"
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
+	slbv1 "github.com/obnahsgnaw/socketapi/gen/slb/v1"
 	"github.com/obnahsgnaw/socketgateway/asset"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net"
@@ -207,6 +208,10 @@ func (s *Server) WithRpcServer(port int) *rpc2.Server {
 	ss.RegisterService(rpc2.ServiceInfo{
 		Desc: messagev1.MessageService_ServiceDesc,
 		Impl: impl.NewMessageService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
+	})
+	ss.RegisterService(rpc2.ServiceInfo{
+		Desc: slbv1.SlbService_ServiceDesc,
+		Impl: impl.NewSlbService(func() *socket.Server { return s.ss }),
 	})
 	s.m.With(action.CloseAction(closeAction))
 	s.m.With(action.Gateway(ss.Host()))
