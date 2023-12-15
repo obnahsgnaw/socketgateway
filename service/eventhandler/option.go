@@ -61,3 +61,15 @@ func CodedProvider(p codec.DataBuilderProvider) Option {
 		event.codedProvider = p
 	}
 }
+
+func Watcher(watcher LogWatcher) Option {
+	return func(event *Event) {
+		event.WatchLog(watcher)
+	}
+}
+
+func Ticker(name string, ticker TickHandler) Option {
+	return func(event *Event) {
+		event.AddTicker(name, ticker)
+	}
+}

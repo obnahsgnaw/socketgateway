@@ -9,7 +9,7 @@ require (
 	github.com/obnahsgnaw/application v0.15.14
 	github.com/obnahsgnaw/rpc v0.4.9
 	github.com/obnahsgnaw/socketapi v0.5.0
-	github.com/obnahsgnaw/socketutil v0.7.2
+	github.com/obnahsgnaw/socketutil v0.8.0
 	github.com/panjf2000/gnet/v2 v2.2.9
 	go.uber.org/zap v1.23.0
 	google.golang.org/grpc v1.55.0

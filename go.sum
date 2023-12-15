@@ -70,6 +70,8 @@ github.com/obnahsgnaw/socketapi v0.5.0 h1:Wt2ociNzt5wKlGAXfzzRlIC7ebkpQmbsLv3wqO
 github.com/obnahsgnaw/socketapi v0.5.0/go.mod h1:4nnuHzzHpuO6fPOSl9qY1fnrD/UWubc3kp7ReEIpNtM=
 github.com/obnahsgnaw/socketutil v0.7.2 h1:V4SWjmmvHCG1j+zOKIwNkBNuWYWAE0h+lY/kOTz9OHk=
 github.com/obnahsgnaw/socketutil v0.7.2/go.mod h1:7x0AIdtVavwyrdxTa3peD5mlhtycy4BMJIUdg7NSkUw=
+github.com/obnahsgnaw/socketutil v0.8.0 h1:W6SjdOZwUHIGEAIG2xLSJRdMAhiXfP/2V/j0HanKY0k=
+github.com/obnahsgnaw/socketutil v0.8.0/go.mod h1:7x0AIdtVavwyrdxTa3peD5mlhtycy4BMJIUdg7NSkUw=
 github.com/panjf2000/ants/v2 v2.7.1 h1:qBy5lfSdbxvrR0yUnZfaEDjf0FlCw4ufsbcsxmE7r+M=
 github.com/panjf2000/ants/v2 v2.7.1/go.mod h1:KIBmYG9QQX5U2qzFP/yQJaq/nSb6rahS9iEHkrCMgM8=
 github.com/panjf2000/gnet/v2 v2.2.9 h1:rmIkaXYtMb2dkgaedojb1uEM2NgVM0jdrnmSNq7F/Vk=
