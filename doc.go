@@ -50,9 +50,8 @@ type DocServer struct {
 
 // doc-index --> id-list --> key list
 
-// NewDocServer new a socket doc server
-func NewDocServer(clusterId string, config *DocConfig) *DocServer {
-	if config.debug {
+func newEngine(debug bool) *gin.Engine {
+	if debug {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -61,7 +60,14 @@ func NewDocServer(clusterId string, config *DocConfig) *DocServer {
 	e.GET("/favicon.ico", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
+	return e
+}
+func NewDocServer(clusterId string, config *DocConfig) *DocServer {
+	e := newEngine(config.debug)
+	return NewDocServerWithEngine(e, clusterId, config)
+}
 
+func NewDocServerWithEngine(e *gin.Engine, clusterId string, config *DocConfig) *DocServer {
 	s := &DocServer{
 		config:    config,
 		engine:    e,
@@ -99,7 +105,7 @@ func (s *DocServer) RegInfo() *regCenter.RegInfo {
 }
 
 func (s *DocServer) initTemplate() error {
-	t := template.New("index.tmpl")
+	t := template.New("socket-gw-index.tmpl")
 	tmpl, _ := asset.Asset("service/doc/html/index.tmpl")
 	_, err := t.Parse(string(tmpl))
 	if err != nil {
@@ -130,7 +136,7 @@ func (s *DocServer) initIndexRoute() {
 				}
 			}
 		}
-		c.HTML(http.StatusOK, "index.tmpl", gin.H{
+		c.HTML(http.StatusOK, "socket-gw-index.tmpl", gin.H{
 			"module":  c.Param("md"),
 			"title":   title,
 			"gateway": gwUrls,

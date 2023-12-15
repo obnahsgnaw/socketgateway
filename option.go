@@ -25,6 +25,7 @@ func Keepalive(interval uint) Option {
 		s.keepalive = interval
 	}
 }
+
 func ReuseAddr() Option {
 	return func(s *Server) {
 		s.reuseAddr = true

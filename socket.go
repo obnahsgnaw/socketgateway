@@ -2,6 +2,7 @@ package socketgateway
 
 import (
 	"errors"
+	"github.com/gin-gonic/gin"
 	"github.com/obnahsgnaw/application"
 	"github.com/obnahsgnaw/application/endtype"
 	"github.com/obnahsgnaw/application/pkg/logging/logger"
@@ -29,6 +30,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -53,7 +55,9 @@ type Server struct {
 	se              socket.Engine
 	regInfo         *regCenter.RegInfo
 	rs              *rpc2.Server
+	rsCus           bool
 	ds              *DocServer
+	dsCus           bool
 	logger          *zap.Logger
 	handlerRegInfo  *regCenter.RegInfo
 	errs            []error
@@ -112,7 +116,12 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 	if s.st == "" {
 		s.addErr(errors.New(s.msg("type not support")))
 	}
-	s.logger, err = logger.New(utils.ToStr("Soc[", et.String(), "][", st.String(), "-gateway]"), app.LogConfig(), app.Debugger().Debug())
+	logCnf := logger.CopyCnfWithLevel(s.app.LogConfig())
+	if logCnf != nil {
+		logCnf.AddSubDir(filepath.Join(s.et.String(), "socket-gateway-"+s.st.String()))
+		logCnf.SetFilename("gateway")
+	}
+	s.logger, err = logger.New(utils.ToStr("socket-gateway:", s.st.String()), logCnf, app.Debugger().Debug())
 	s.addErr(err)
 	s.e = eventhandler.New(app.Context(), s.m, st, eventhandler.Logger(s.logger))
 	s.regInfo = &regCenter.RegInfo{
@@ -189,45 +198,65 @@ func (s *Server) Logger() *zap.Logger {
 
 // WithRpcServer new rpc server for socket
 func (s *Server) WithRpcServer(port int) *rpc2.Server {
-	ss := rpc2.New(s.app, s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s.et, url.Host{
+	s.rs = rpc2.New(s.app, s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s.et, url.Host{
 		Ip:   s.host.Ip,
 		Port: port,
 	}, rpc2.RegEnable(), rpc2.Parent(s))
-	ss.RegisterService(rpc2.ServiceInfo{
-		Desc: bindv1.BindService_ServiceDesc,
-		Impl: impl.NewBindService(func() *socket.Server { return s.ss }),
-	})
-	ss.RegisterService(rpc2.ServiceInfo{
-		Desc: connv1.ConnService_ServiceDesc,
-		Impl: impl.NewConnService(func() *socket.Server { return s.ss }),
-	})
-	ss.RegisterService(rpc2.ServiceInfo{
-		Desc: groupv1.GroupService_ServiceDesc,
-		Impl: impl.NewGroupService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
-	})
-	ss.RegisterService(rpc2.ServiceInfo{
-		Desc: messagev1.MessageService_ServiceDesc,
-		Impl: impl.NewMessageService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
-	})
-	ss.RegisterService(rpc2.ServiceInfo{
-		Desc: slbv1.SlbService_ServiceDesc,
-		Impl: impl.NewSlbService(func() *socket.Server { return s.ss }),
-	})
-	s.m.With(action.CloseAction(closeAction))
-	s.m.With(action.Gateway(ss.Host()))
-	s.m.With(action.RtHandler(impl.NewRemoteHandler()))
-	s.rs = ss
-	s.debug("rpc server enabled")
 
-	return ss
+	return s.rs
 }
 
-// WithDocServer doc server
+func (s *Server) initRpc() {
+	if s.rs != nil {
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: bindv1.BindService_ServiceDesc,
+			Impl: impl.NewBindService(func() *socket.Server { return s.ss }),
+		})
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: connv1.ConnService_ServiceDesc,
+			Impl: impl.NewConnService(func() *socket.Server { return s.ss }),
+		})
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: groupv1.GroupService_ServiceDesc,
+			Impl: impl.NewGroupService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
+		})
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: messagev1.MessageService_ServiceDesc,
+			Impl: impl.NewMessageService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
+		})
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: slbv1.SlbService_ServiceDesc,
+			Impl: impl.NewSlbService(func() *socket.Server { return s.ss }),
+		})
+		s.m.With(action.CloseAction(closeAction))
+		s.m.With(action.Gateway(s.rs.Host()))
+		s.m.With(action.RtHandler(impl.NewRemoteHandler()))
+	}
+}
+
+func (s *Server) WithRpcServerIns(ins *rpc2.Server) {
+	s.rs = ins
+	s.rsCus = true
+}
+
+// WithDocServerIns doc server
+func (s *Server) WithDocServerIns(e *gin.Engine, ePort int, docProxyPrefix string) {
+	s.ds = NewDocServerWithEngine(e, s.app.ID(), s.docConfig(ePort, docProxyPrefix))
+	s.dsCus = true
+}
+
 func (s *Server) WithDocServer(port int, docProxyPrefix string) *DocServer {
+
+	s.ds = NewDocServer(s.app.ID(), s.docConfig(port, docProxyPrefix))
+
+	return s.ds
+}
+
+func (s *Server) docConfig(port int, docProxyPrefix string) *DocConfig {
 	if docProxyPrefix != "" {
 		docProxyPrefix = "/" + strings.Trim(docProxyPrefix, "/")
 	}
-	config := &DocConfig{
+	return &DocConfig{
 		id:       s.id,
 		endType:  s.et,
 		servType: s.st,
@@ -253,10 +282,6 @@ func (s *Server) WithDocServer(port int, docProxyPrefix string) *DocServer {
 		},
 		debug: s.routeDebug,
 	}
-	s.ds = NewDocServer(s.app.ID(), config)
-	s.debug("doc server enabled")
-
-	return s.ds
 }
 
 func (s *Server) WatchLog(watcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)) {
@@ -293,8 +318,10 @@ func (s *Server) Release() {
 	if s.rs != nil {
 		s.rs.Release()
 	}
-	_ = s.logger.Sync()
-	s.debug("released")
+	if s.logger != nil {
+		s.logger.Info("released")
+		_ = s.logger.Sync()
+	}
 }
 
 func (s *Server) SetSocketEngine(engine socket.Engine) {
@@ -306,7 +333,7 @@ func (s *Server) Run(failedCb func(error)) {
 		failedCb(s.errs[0])
 		return
 	}
-	s.debug("start running...")
+	s.logger.Info("init start...")
 	if s.se == nil {
 		s.se = net.New()
 	}
@@ -322,27 +349,38 @@ func (s *Server) Run(failedCb func(error)) {
 			if err := s.app.DoRegister(s.regInfo); err != nil {
 				failedCb(s.socketGwError(s.msg("register soc failed"), err))
 			}
+			s.logger.Debug("server registered")
 		}
-		if err := s.app.DoRegister(s.ds.regInfo); err != nil {
-			failedCb(s.socketGwError(s.msg("register doc failed"), err))
+		if s.ds != nil {
+			if err := s.app.DoRegister(s.ds.regInfo); err != nil {
+				failedCb(s.socketGwError(s.msg("register doc failed"), err))
+			}
+			s.logger.Debug("doc registered")
 		}
+		s.logger.Debug("gateway watch start")
 		if err := s.watch(s.app.Register()); err != nil {
 			failedCb(s.socketGwError(s.msg("watch failed"), err))
 		}
 	}
 	s.defaultListen()
-	s.logger.Info(utils.ToStr(s.st.String(), " server[", s.host.String(), "] start and serving..."))
-	s.ss.SyncStart(failedCb)
 	if s.ds != nil {
-		docDesc := utils.ToStr("doc server[", s.ds.config.Origin.Host.String(), "] ")
-		s.logger.Info(docDesc + "start and serving...")
-		s.debug("doc url=" + s.ds.DocUrl())
-		s.debug("index doc url=" + s.ds.IndexDocUrl())
-		s.ds.SyncStart(failedCb)
+		s.logger.Debug("doc server enabled, init start...")
+		s.logger.Info(utils.ToStr("doc url=", s.ds.DocUrl(), ", index doc url=", s.ds.IndexDocUrl()))
+		if !s.dsCus {
+			docDesc := utils.ToStr("doc server[", s.ds.config.Origin.Host.String(), "] ")
+			s.logger.Info(docDesc + "start and serving...")
+			s.ds.SyncStart(failedCb)
+		}
 	}
 	if s.rs != nil {
-		s.rs.Run(failedCb)
+		s.logger.Debug("rpc server enabled, init start...")
+		s.initRpc()
+		if !s.rsCus {
+			s.rs.Run(failedCb)
+		}
 	}
+	s.logger.Info(utils.ToStr("server[", s.host.String(), "] start and serving..."))
+	s.ss.SyncStart(failedCb)
 }
 
 func (s *Server) socketGwError(msg string, err error) error {
