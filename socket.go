@@ -27,7 +27,6 @@ import (
 	"github.com/obnahsgnaw/socketgateway/service/proto/impl"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"net/http"
 	"path/filepath"
@@ -52,6 +51,7 @@ type Server struct {
 	m               *action.Manager
 	ss              *socket.Server
 	e               *eventhandler.Event
+	eo              []eventhandler.Option
 	se              socket.Engine
 	regInfo         *regCenter.RegInfo
 	rs              *rpc2.Server
@@ -123,7 +123,6 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 	}
 	s.logger, err = logger.New(utils.ToStr("socket-gateway:", s.st.String()), logCnf, app.Debugger().Debug())
 	s.addErr(err)
-	s.e = eventhandler.New(app.Context(), s.m, st, eventhandler.Logger(s.logger))
 	s.regInfo = &regCenter.RegInfo{
 		AppId:   s.app.ID(),
 		RegType: regtype.RegType(s.st),
@@ -246,9 +245,7 @@ func (s *Server) WithDocServerIns(e *gin.Engine, ePort int, docProxyPrefix strin
 }
 
 func (s *Server) WithDocServer(port int, docProxyPrefix string) *DocServer {
-
 	s.ds = NewDocServer(s.app.ID(), s.docConfig(port, docProxyPrefix))
-
 	return s.ds
 }
 
@@ -284,8 +281,8 @@ func (s *Server) docConfig(port int, docProxyPrefix string) *DocConfig {
 	}
 }
 
-func (s *Server) WatchLog(watcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)) {
-	s.e.WatchLog(watcher)
+func (s *Server) WatchLog(watcher eventhandler.LogWatcher) {
+	s.regEo(eventhandler.Watcher(watcher))
 }
 
 func (s *Server) Engine() *socket.Server {
@@ -293,7 +290,7 @@ func (s *Server) Engine() *socket.Server {
 }
 
 func (s *Server) AddTicker(name string, ticker eventhandler.TickHandler) {
-	s.e.AddTicker(name, ticker)
+	s.regEo(eventhandler.Ticker(name, ticker))
 }
 
 func (s *Server) Listen(action codec.Action, structure action.DataStructure, handler action.Handler) {
@@ -302,6 +299,10 @@ func (s *Server) Listen(action codec.Action, structure action.DataStructure, han
 
 func (s *Server) Send(c socket.Conn, id codec.Action, data codec.DataPtr) (err error) {
 	return s.e.SendAction(c, id, data)
+}
+
+func (s *Server) regEo(option eventhandler.Option) {
+	s.eo = append(s.eo, option)
 }
 
 func (s *Server) Rpc() *rpc2.Server {
@@ -337,6 +338,8 @@ func (s *Server) Run(failedCb func(error)) {
 	if s.se == nil {
 		s.se = net.New()
 	}
+	s.regEo(eventhandler.Logger(s.logger))
+	s.e = eventhandler.New(s.app.Context(), s.m, s.sct, s.eo...)
 	s.ss = socket.New(s.app.Context(), s.sct, s.host.Port, s.se, s.e, &socket.Config{
 		MultiCore: true,
 		Keepalive: s.keepalive,
@@ -351,12 +354,6 @@ func (s *Server) Run(failedCb func(error)) {
 			}
 			s.logger.Debug("server registered")
 		}
-		if s.ds != nil {
-			if err := s.app.DoRegister(s.ds.regInfo); err != nil {
-				failedCb(s.socketGwError(s.msg("register doc failed"), err))
-			}
-			s.logger.Debug("doc registered")
-		}
 		s.logger.Debug("gateway watch start")
 		if err := s.watch(s.app.Register()); err != nil {
 			failedCb(s.socketGwError(s.msg("watch failed"), err))
@@ -370,6 +367,12 @@ func (s *Server) Run(failedCb func(error)) {
 			docDesc := utils.ToStr("doc server[", s.ds.config.Origin.Host.String(), "] ")
 			s.logger.Info(docDesc + "start and serving...")
 			s.ds.SyncStart(failedCb)
+		}
+		if s.app.Register() != nil {
+			if err := s.app.DoRegister(s.ds.regInfo); err != nil {
+				failedCb(s.socketGwError(s.msg("register doc failed"), err))
+			}
+			s.logger.Debug("doc registered")
 		}
 	}
 	if s.rs != nil {
@@ -388,7 +391,6 @@ func (s *Server) socketGwError(msg string, err error) error {
 }
 
 func (s *Server) defaultListen() {
-
 	s.Listen(action.New(gatewayv1.ActionId_Ping),
 		func() codec.DataPtr {
 			return &gatewayv1.PingRequest{}
@@ -413,7 +415,6 @@ func (s *Server) defaultListen() {
 				CryptKey: nil,
 			}
 			respData = response
-
 			// 没有地址标识没启用认证 返回默认的密钥
 			if s.authAddress == "" {
 				response.Success = true
@@ -480,12 +481,12 @@ func (s *Server) watch(register regCenter.Register) error {
 			attr := segments[len(segments)-1]
 			if isDel {
 				if attr == "url" {
-					s.debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] leaved"))
+					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] leaved"))
 					s.ds.Manager.Remove(moduleName, keyName, val)
 				}
 			} else {
 				if attr == "url" {
-					s.debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
+					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
 					s.ds.Manager.Add(moduleName, keyName, "", val, nil)
 				}
 				if attr == "title" {
@@ -515,10 +516,10 @@ func (s *Server) watch(register regCenter.Register) error {
 		moduleName := idSegments[0]
 		keyName := idSegments[1]
 		if isDel {
-			s.debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " leaved"))
+			s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " leaved"))
 			s.m.UnregisterRemoteAction(host)
 		} else {
-			s.debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " added"))
+			s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " added"))
 			flbNum := ""
 			if strings.Contains(val, "|") {
 				valNum := strings.Split(val, "|")
@@ -536,12 +537,6 @@ func (s *Server) watch(register regCenter.Register) error {
 	}
 
 	return nil
-}
-
-func (s *Server) debug(msg string) {
-	if s.app.Debugger().Debug() {
-		s.logger.Debug(msg)
-	}
 }
 
 func (s *Server) addErr(err error) {

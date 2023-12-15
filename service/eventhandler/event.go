@@ -36,6 +36,8 @@ type Event struct {
 	staticEsKey   []byte // 认证之前采用固定密钥，认证之后采用认证后的密钥
 }
 
+type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
+
 func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, options ...Option) *Event {
 	s := &Event{
 		ctx:          ctx,
@@ -79,7 +81,7 @@ func (e *Event) With(options ...Option) {
 
 func (e *Event) OnBoot(s *socket.Server) {
 	if e.logger != nil {
-		e.logger.Info(utils.ToStr("Service[", s.Type().String(), ":", strconv.Itoa(s.Port()), "] booted"))
+		e.logger.Info(utils.ToStr(s.Type().String(), " service[", strconv.Itoa(s.Port()), "] booted"))
 	}
 }
 
@@ -237,7 +239,7 @@ func (e *Event) OnTick(s *socket.Server) (delay time.Duration) {
 
 func (e *Event) OnShutdown(s *socket.Server) {
 	if e.logger != nil {
-		e.logger.Info(utils.ToStr("Service[", s.Type().String(), ":", strconv.Itoa(s.Port()), "] down"))
+		e.logger.Info(utils.ToStr(s.Type().String(), "service[", strconv.Itoa(s.Port()), "] down"))
 	}
 }
 
@@ -249,7 +251,7 @@ func (e *Event) log(c socket.Conn, msg string, l zapcore.Level, data ...zap.Fiel
 	}
 }
 
-func (e *Event) WatchLog(watcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)) {
+func (e *Event) WatchLog(watcher LogWatcher) {
 	e.logWatcher = watcher
 }
 
