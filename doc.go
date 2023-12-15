@@ -11,6 +11,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/doc"
 	"html/template"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	url2 "net/url"
@@ -95,6 +96,14 @@ func NewDocServerWithEngine(e *gin.Engine, clusterId string, config *DocConfig) 
 			"url":    s.DocUrl(),
 			"public": public,
 		},
+	}
+	s.initDocRoute()
+	if s.config.socketGateway {
+		if err := s.initTemplate(); err != nil {
+			log.Println(err.Error())
+		}
+		s.initIndexRoute()
+		s.initServerProxyDocRoute()
 	}
 
 	return s
@@ -205,14 +214,6 @@ func (s *DocServer) initServerProxyDocRoute() {
 }
 
 func (s *DocServer) Start() error {
-	s.initDocRoute()
-	if s.config.socketGateway {
-		if err := s.initTemplate(); err != nil {
-			return err
-		}
-		s.initIndexRoute()
-		s.initServerProxyDocRoute()
-	}
 	if err := s.engine.Run(s.config.Origin.Host.String()); err != nil {
 		return err
 	}
