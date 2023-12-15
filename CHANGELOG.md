@@ -1,9 +1,10 @@
 
-<a name="v"></a>
-## [v](https://8.140.161.172/wangsb/wgateway/compare/v0.23.0...v) (2023-12-15)
+<a name="v0.23.1"></a>
+## [v0.23.1](https://8.140.161.172/wangsb/wgateway/compare/v0.23.0...v0.23.1) (2023-12-15)
 
 ### Bug Fixes
 
+* **all:** fix log
 * **log:** fix log
 
 
