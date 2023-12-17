@@ -3,7 +3,7 @@ package socketgateway
 import (
 	"github.com/gin-gonic/gin"
 	rpc2 "github.com/obnahsgnaw/rpc"
-	"github.com/obnahsgnaw/socketgateway/service/action"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"time"
@@ -83,40 +83,42 @@ func CodedProvider(p codec.DataBuilderProvider) Option {
 
 func RpcServerIns(ins *rpc2.Server) Option {
 	return func(s *Server) {
-		s.WithRpcServerIns(ins)
+		s.withRpcServerIns(ins)
 	}
 }
 
-func WRpcServer(port int) Option {
+func RpcServer(port int) Option {
 	return func(s *Server) {
-		s.WithRpcServer(port)
+		s.withRpcServer(port)
 	}
 }
 
 func DocServerIns(e *gin.Engine, ePort int, docProxyPrefix string) Option {
 	return func(s *Server) {
-		s.WithDocServerIns(e, ePort, docProxyPrefix)
+		s.withDocServerIns(e, ePort, docProxyPrefix)
 	}
 }
 
-func DocServ(port int, docProxyPrefix string) Option {
+func DocServ(port int, docProxyPrefix string, projPrefixed bool) Option {
 	return func(s *Server) {
-		s.WithDocServer(port, docProxyPrefix)
+		s.withDocServer(port, docProxyPrefix, projPrefixed)
 	}
 }
+
 func Watcher(watcher eventhandler.LogWatcher) Option {
 	return func(s *Server) {
-		s.WatchLog(watcher)
-	}
-}
-func Ticker(name string, ticker eventhandler.TickHandler) Option {
-	return func(s *Server) {
-		s.AddTicker(name, ticker)
+		s.watchLog(watcher)
 	}
 }
 
-func ActionListen(action codec.Action, structure action.DataStructure, handler action.Handler) Option {
+func Ticker(name string, ticker eventhandler.TickHandler) Option {
 	return func(s *Server) {
-		s.Listen(action, structure, handler)
+		s.addTicker(name, ticker)
+	}
+}
+
+func Engine(e socket.Engine) Option {
+	return func(s *Server) {
+		s.setSocketEngine(e)
 	}
 }

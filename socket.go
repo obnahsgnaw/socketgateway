@@ -58,6 +58,7 @@ type Server struct {
 	rsCus           bool
 	ds              *DocServer
 	dsCus           bool
+	dsPrefixed      bool // 自定义外部引擎时，多个文档路径冲突，指定外部引擎时或者单独的引擎手动指定增加前缀保持一致（用于有个集中服务包含很多，又有单独的服务）
 	logger          *zap.Logger
 	handlerRegInfo  *regCenter.RegInfo
 	errs            []error
@@ -70,23 +71,7 @@ type Server struct {
 	authAddress     string
 	crypto          eventhandler.Cryptor
 	noAuthStaticKey []byte
-}
-
-func sct2st(st sockettype.SocketType) (sst servertype.ServerType) {
-	switch st {
-	case sockettype.TCP, sockettype.TCP4, sockettype.TCP6:
-		sst = servertype.Tcp
-		break
-	case sockettype.WSS:
-		sst = servertype.Wss
-		break
-	case sockettype.UDP, sockettype.UDP4, sockettype.UDP6:
-		sst = servertype.Udp
-		break
-	default:
-		panic("trans socket type to server type failed")
-	}
-	return
+	actListeners    []func(*action.Manager)
 }
 
 func st2hdt(sst servertype.ServerType) servertype.ServerType {
@@ -106,7 +91,7 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 	s := &Server{
 		id:   "gateway-gateway",
 		name: "gateway",
-		st:   sct2st(st),
+		st:   st.ToServerType(),
 		sct:  st,
 		et:   et,
 		host: host,
@@ -118,10 +103,11 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 	}
 	logCnf := logger.CopyCnfWithLevel(s.app.LogConfig())
 	if logCnf != nil {
-		logCnf.AddSubDir(filepath.Join(s.et.String(), "socket-gateway-"+s.st.String()))
-		logCnf.SetFilename("gateway")
+		logCnf.AddSubDir(filepath.Join(s.et.String(), utils.ToStr(s.st.String(), "-", s.id)))
+		logCnf.SetFilename(utils.ToStr(s.st.String(), "-", s.id))
+		logCnf.ReplaceTraceLevel(zap.NewAtomicLevelAt(zap.FatalLevel))
 	}
-	s.logger, err = logger.New(utils.ToStr("socket-gateway:", s.st.String()), logCnf, app.Debugger().Debug())
+	s.logger, err = logger.New(utils.ToStr(s.st.String(), "-gateway"), logCnf, app.Debugger().Debug())
 	s.addErr(err)
 	s.regInfo = &regCenter.RegInfo{
 		AppId:   s.app.ID(),
@@ -195,8 +181,8 @@ func (s *Server) Logger() *zap.Logger {
 	return s.logger
 }
 
-// WithRpcServer new rpc server for socket
-func (s *Server) WithRpcServer(port int) *rpc2.Server {
+// new rpc server for socket
+func (s *Server) withRpcServer(port int) *rpc2.Server {
 	s.rs = rpc2.New(s.app, s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s.et, url.Host{
 		Ip:   s.host.Ip,
 		Port: port,
@@ -229,22 +215,24 @@ func (s *Server) initRpc() {
 		})
 		s.m.With(action.CloseAction(closeAction))
 		s.m.With(action.Gateway(s.rs.Host()))
-		s.m.With(action.RtHandler(impl.NewRemoteHandler()))
+		s.m.With(action.RtHandler(impl.NewRemoteHandler(s.logger)))
 	}
 }
 
-func (s *Server) WithRpcServerIns(ins *rpc2.Server) {
+func (s *Server) withRpcServerIns(ins *rpc2.Server) {
 	s.rs = ins
 	s.rsCus = true
+	s.rs.AddRegInfo(s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s)
 }
 
-// WithDocServerIns doc server
-func (s *Server) WithDocServerIns(e *gin.Engine, ePort int, docProxyPrefix string) {
-	s.ds = NewDocServerWithEngine(e, s.app.ID(), s.docConfig(ePort, docProxyPrefix))
+// withDocServerIns doc server
+func (s *Server) withDocServerIns(e *gin.Engine, ePort int, docProxyPrefix string) {
 	s.dsCus = true
+	s.ds = NewDocServerWithEngine(e, s.app.ID(), s.docConfig(ePort, docProxyPrefix))
 }
 
-func (s *Server) WithDocServer(port int, docProxyPrefix string) *DocServer {
+func (s *Server) withDocServer(port int, docProxyPrefix string, projPrefixed bool) *DocServer {
+	s.dsPrefixed = projPrefixed
 	s.ds = NewDocServer(s.app.ID(), s.docConfig(port, docProxyPrefix))
 	return s.ds
 }
@@ -252,6 +240,11 @@ func (s *Server) WithDocServer(port int, docProxyPrefix string) *DocServer {
 func (s *Server) docConfig(port int, docProxyPrefix string) *DocConfig {
 	if docProxyPrefix != "" {
 		docProxyPrefix = "/" + strings.Trim(docProxyPrefix, "/")
+	}
+
+	docName := "docs"
+	if s.dsCus || s.dsPrefixed {
+		docName = utils.ToStr(s.et.String(), "-", s.st.String(), "-docs")
 	}
 	return &DocConfig{
 		id:       s.id,
@@ -269,7 +262,7 @@ func (s *Server) docConfig(port int, docProxyPrefix string) *DocConfig {
 		socketGateway: true,
 		Doc: DocItem{
 			socketType: s.sct,
-			Path:       "/docs/gateway/gateway." + s.st.String() + "doc", // the same with the socket handler
+			Path:       utils.ToStr("/", docName, "/gateway/gateway."+s.st.String()+"doc"), // the same with the socket handler,
 			Prefix:     docProxyPrefix + "/docs",
 			Title:      s.name,
 			Public:     true,
@@ -281,7 +274,7 @@ func (s *Server) docConfig(port int, docProxyPrefix string) *DocConfig {
 	}
 }
 
-func (s *Server) WatchLog(watcher eventhandler.LogWatcher) {
+func (s *Server) watchLog(watcher eventhandler.LogWatcher) {
 	s.regEo(eventhandler.Watcher(watcher))
 }
 
@@ -289,12 +282,15 @@ func (s *Server) Engine() *socket.Server {
 	return s.ss
 }
 
-func (s *Server) AddTicker(name string, ticker eventhandler.TickHandler) {
+func (s *Server) addTicker(name string, ticker eventhandler.TickHandler) {
 	s.regEo(eventhandler.Ticker(name, ticker))
 }
 
-func (s *Server) Listen(action codec.Action, structure action.DataStructure, handler action.Handler) {
-	s.m.RegisterHandlerAction(action, structure, handler)
+func (s *Server) Listen(act codec.Action, structure action.DataStructure, handler action.Handler) {
+	s.actListeners = append(s.actListeners, func(manager *action.Manager) {
+		manager.RegisterHandlerAction(act, structure, handler)
+		s.logger.Debug("listened action:" + act.Name)
+	})
 }
 
 func (s *Server) Send(c socket.Conn, id codec.Action, data codec.DataPtr) (err error) {
@@ -310,11 +306,16 @@ func (s *Server) Rpc() *rpc2.Server {
 }
 
 func (s *Server) Release() {
+	var cb = func(msg string) {
+		if s.logger != nil {
+			s.logger.Debug(msg)
+		}
+	}
 	if s.RegEnabled() && s.app.Register() != nil {
-		_ = s.app.DoUnregister(s.regInfo)
+		_ = s.app.DoUnregister(s.regInfo, cb)
 	}
 	if s.ds != nil && s.app.Register() != nil {
-		_ = s.app.DoUnregister(s.ds.regInfo)
+		_ = s.app.DoUnregister(s.ds.regInfo, cb)
 	}
 	if s.rs != nil {
 		s.rs.Release()
@@ -325,7 +326,7 @@ func (s *Server) Release() {
 	}
 }
 
-func (s *Server) SetSocketEngine(engine socket.Engine) {
+func (s *Server) setSocketEngine(engine socket.Engine) {
 	s.se = engine
 }
 
@@ -337,6 +338,9 @@ func (s *Server) Run(failedCb func(error)) {
 	s.logger.Info("init start...")
 	if s.se == nil {
 		s.se = net.New()
+		s.logger.Info("socket engine initialize(default)")
+	} else {
+		s.logger.Info("socket engine initialize(customer)")
 	}
 	s.regEo(eventhandler.Logger(s.logger))
 	s.e = eventhandler.New(s.app.Context(), s.m, s.sct, s.eo...)
@@ -347,42 +351,90 @@ func (s *Server) Run(failedCb func(error)) {
 		Ticker:    s.tickInterval > 0,
 		ReuseAddr: s.reuseAddr,
 	})
+	s.logger.Info("socket server initialized")
+	s.defaultListen()
+	for _, h := range s.actListeners {
+		h(s.m)
+	}
+	s.logger.Info("listen action initialized")
+	regLogCb := func(msg string) {
+		s.logger.Debug(msg)
+	}
 	if s.app.Register() != nil {
 		if s.RegEnabled() {
-			if err := s.app.DoRegister(s.regInfo); err != nil {
+			s.logger.Debug("server register start...")
+			if err := s.app.DoRegister(s.regInfo, regLogCb); err != nil {
 				failedCb(s.socketGwError(s.msg("register soc failed"), err))
 			}
 			s.logger.Debug("server registered")
 		}
-		s.logger.Debug("gateway watch start")
 		if err := s.watch(s.app.Register()); err != nil {
 			failedCb(s.socketGwError(s.msg("watch failed"), err))
 		}
 	}
-	s.defaultListen()
 	if s.ds != nil {
-		s.logger.Debug("doc server enabled, init start...")
-		s.logger.Info(utils.ToStr("doc url=", s.ds.DocUrl(), ", index doc url=", s.ds.IndexDocUrl()))
+		s.logger.Info("doc server enabled, init start...")
+		s.logger.Info(utils.ToStr("doc index url=", s.ds.IndexDocUrl(), ", gateway doc url=", s.ds.DocUrl()))
 		if !s.dsCus {
 			docDesc := utils.ToStr("doc server[", s.ds.config.Origin.Host.String(), "] ")
 			s.logger.Info(docDesc + "start and serving...")
 			s.ds.SyncStart(failedCb)
 		}
 		if s.app.Register() != nil {
-			if err := s.app.DoRegister(s.ds.regInfo); err != nil {
+			s.logger.Debug("doc register start")
+			if err := s.app.DoRegister(s.ds.regInfo, regLogCb); err != nil {
 				failedCb(s.socketGwError(s.msg("register doc failed"), err))
 			}
 			s.logger.Debug("doc registered")
 		}
+		s.logger.Debug("sub doc watch start...")
+		prefix := s.ds.regInfo.Prefix()
+		if prefix == "" {
+			failedCb(errors.New("watch key prefix is empty"))
+			return
+		}
+		err := s.app.Register().Watch(s.app.Context(), prefix, func(key string, val string, isDel bool) {
+			segments := strings.Split(key, "/")
+			id := segments[len(segments)-3]
+			idSegments := strings.Split(id, "-")
+			moduleName := idSegments[0]
+			keyName := idSegments[1]
+			attr := segments[len(segments)-1]
+			if isDel {
+				if attr == "url" {
+					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] leaved"))
+					s.ds.Manager.Remove(moduleName, keyName, val)
+				}
+			} else {
+				if attr == "url" {
+					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
+					s.ds.Manager.Add(moduleName, keyName, "", val, nil)
+				}
+				if attr == "title" {
+					s.ds.Manager.Add(moduleName, keyName, val, "", nil)
+				}
+				if attr == "public" {
+					var public bool
+					if val == "1" {
+						public = true
+					}
+					s.ds.Manager.Add(moduleName, keyName, "", "", &public)
+				}
+			}
+		})
+		if err != nil {
+			failedCb(err)
+			return
+		}
 	}
 	if s.rs != nil {
-		s.logger.Debug("rpc server enabled, init start...")
+		s.logger.Info("rpc server enabled, init start...")
 		s.initRpc()
 		if !s.rsCus {
 			s.rs.Run(failedCb)
 		}
 	}
-	s.logger.Info(utils.ToStr("server[", s.host.String(), "] start and serving..."))
+	s.logger.Info(utils.ToStr("socket[", s.host.String(), "] start and serving..."))
 	s.ss.SyncStart(failedCb)
 }
 
@@ -467,45 +519,8 @@ func (s *Server) watch(register regCenter.Register) error {
 	if s.regEnable {
 		// watch socket
 	}
-	if s.ds != nil {
-		prefix := s.ds.regInfo.Prefix()
-		if prefix == "" {
-			return errors.New("watch key prefix is empty")
-		}
-		err := register.Watch(s.app.Context(), prefix, func(key string, val string, isDel bool) {
-			segments := strings.Split(key, "/")
-			id := segments[len(segments)-3]
-			idSegments := strings.Split(id, "-")
-			moduleName := idSegments[0]
-			keyName := idSegments[1]
-			attr := segments[len(segments)-1]
-			if isDel {
-				if attr == "url" {
-					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] leaved"))
-					s.ds.Manager.Remove(moduleName, keyName, val)
-				}
-			} else {
-				if attr == "url" {
-					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
-					s.ds.Manager.Add(moduleName, keyName, "", val, nil)
-				}
-				if attr == "title" {
-					s.ds.Manager.Add(moduleName, keyName, val, "", nil)
-				}
-				if attr == "public" {
-					var public bool
-					if val == "1" {
-						public = true
-					}
-					s.ds.Manager.Add(moduleName, keyName, "", "", &public)
-				}
-			}
-		})
-		if err != nil {
-			return err
-		}
-	}
 	// watch handler
+	s.logger.Debug("handler watch start...")
 	handlerPrefix := s.handlerRegInfo.Prefix()
 	err := register.Watch(s.app.Context(), handlerPrefix, func(key string, val string, isDel bool) {
 		segments := strings.Split(key, "/")

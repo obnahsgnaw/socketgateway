@@ -7,14 +7,24 @@ import (
 	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketutil/codec"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 type RemoteHandler struct {
 	manager *rpc.Manager
 }
 
-func NewRemoteHandler() *RemoteHandler {
-	return &RemoteHandler{manager: rpc.NewManager()}
+func NewRemoteHandler(l *zap.Logger) *RemoteHandler {
+	m := rpc.NewManager()
+	m.RegisterAfterHandler(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, err error, opts ...grpc.CallOption) {
+		if err != nil {
+			l.Error(utils.ToStr("rpc call socket-handler[", method, "] failed,", err.Error()), zap.Any("req", req), zap.Any("resp", reply))
+		} else {
+			l.Debug(utils.ToStr("rpc call socket-handler[", method, "] success"), zap.Any("req", req), zap.Any("resp", reply))
+		}
+	})
+	return &RemoteHandler{manager: m}
 }
 
 func (h *RemoteHandler) Call(serverHost, gateway, format string, c socket.Conn, id codec.ActionId, data []byte) (codec.Action, []byte, error) {
