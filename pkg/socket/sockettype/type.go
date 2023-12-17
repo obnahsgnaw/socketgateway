@@ -1,5 +1,7 @@
 package sockettype
 
+import "github.com/obnahsgnaw/application/servertype"
+
 // SocketType 服务类型
 type SocketType string
 
@@ -28,4 +30,21 @@ func (s SocketType) IsUdp() bool {
 
 func (s SocketType) IsWss() bool {
 	return s == WSS
+}
+
+func (s SocketType) ToServerType() (sst servertype.ServerType) {
+	switch s {
+	case TCP, TCP4, TCP6:
+		sst = servertype.Tcp
+		break
+	case WSS:
+		sst = servertype.Wss
+		break
+	case UDP, UDP4, UDP6:
+		sst = servertype.Udp
+		break
+	default:
+		panic("trans socket type to server type failed")
+	}
+	return
 }

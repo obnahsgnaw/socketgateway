@@ -6,8 +6,9 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/gobwas/ws v1.2.1
 	github.com/gorilla/websocket v1.5.0
-	github.com/obnahsgnaw/application v0.15.14
-	github.com/obnahsgnaw/rpc v0.4.9
+	github.com/obnahsgnaw/application v0.15.15
+	github.com/obnahsgnaw/http v0.0.1
+	github.com/obnahsgnaw/rpc v0.4.11
 	github.com/obnahsgnaw/socketapi v0.5.0
 	github.com/obnahsgnaw/socketutil v0.8.0
 	github.com/panjf2000/gnet/v2 v2.2.9
@@ -15,8 +16,6 @@ require (
 	google.golang.org/grpc v1.55.0
 	google.golang.org/protobuf v1.30.0
 )
-
-replace github.com/obnahsgnaw/rpc v0.4.5 => ../rpc
 
 require (
 	github.com/asaskevich/EventBus v0.0.0-20200907212545-49d423059eef // indirect

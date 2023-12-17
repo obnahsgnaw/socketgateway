@@ -7,6 +7,7 @@ import (
 	"github.com/obnahsgnaw/application/regtype"
 	"github.com/obnahsgnaw/application/servertype"
 	"github.com/obnahsgnaw/application/service/regCenter"
+	http2 "github.com/obnahsgnaw/http"
 	"github.com/obnahsgnaw/socketgateway/asset"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/doc"
@@ -51,20 +52,17 @@ type DocServer struct {
 
 // doc-index --> id-list --> key list
 
-func newEngine(debug bool) *gin.Engine {
-	if debug {
-		gin.SetMode(gin.DebugMode)
-	} else {
-		gin.SetMode(gin.ReleaseMode)
-	}
-	e := gin.Default()
-	e.GET("/favicon.ico", func(c *gin.Context) {
-		c.Status(http.StatusOK)
-	})
-	return e
-}
 func NewDocServer(clusterId string, config *DocConfig) *DocServer {
-	e := newEngine(config.debug)
+	e, _ := http2.New(&http2.Config{
+		Name:           config.id,
+		DebugMode:      false,
+		LogDebug:       true,
+		AccessWriter:   nil,
+		ErrWriter:      nil,
+		TrustedProxies: nil,
+		Cors:           nil,
+		LogCnf:         nil,
+	})
 	return NewDocServerWithEngine(e, clusterId, config)
 }
 
