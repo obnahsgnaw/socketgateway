@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/obnahsgnaw/application/endtype"
 	"github.com/obnahsgnaw/application/pkg/url"
+	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/application/regtype"
 	"github.com/obnahsgnaw/application/servertype"
 	"github.com/obnahsgnaw/application/service/regCenter"
@@ -17,42 +18,45 @@ import (
 	"net/http/httputil"
 	url2 "net/url"
 	"strconv"
-	"strings"
 )
 
+/*
+1. 注册当前 socket gateway 的路由 以及 带API网关前缀的路由
+2. 注册当前 socket gateway 以及 socket handler的模块路由，显示模块下的文档
+3. 注册当前模块下的特定key的路由，显示具体文档
+*/
+
 type DocConfig struct {
-	id            string
-	endType       endtype.EndType
-	servType      servertype.ServerType
-	Origin        url.Origin
-	RegTtl        int64
-	Prefix        string
-	socketGateway bool
-	CacheTtl      int
-	Doc           DocItem
-	debug         bool
+	id       string
+	endType  endtype.EndType
+	servType servertype.ServerType
+	Origin   url.Origin
+	RegTtl   int64
+	GwPrefix string // 大前缀
+	CacheTtl int
+	Doc      DocItem
+	debug    bool
 }
 
 type DocItem struct {
 	Title      string
 	Public     bool
 	socketType sockettype.SocketType // 通过上层应用来设置
-	Path       string
-	Prefix     string
+	path       string
 	Provider   func() ([]byte, error)
 }
 
 type DocServer struct {
-	config    *DocConfig
-	engine    *gin.Engine
-	Manager   *doc.Manager
-	regInfo   *regCenter.RegInfo
-	moduleDoc string
+	config  *DocConfig
+	engine  *gin.Engine
+	Manager *doc.Manager
+	regInfo *regCenter.RegInfo
+	prefix  string
 }
 
 // doc-index --> id-list --> key list
 
-func NewDocServer(clusterId string, config *DocConfig) *DocServer {
+func newDocServer(clusterId string, config *DocConfig) *DocServer {
 	e, _ := http2.New(&http2.Config{
 		Name:           config.id,
 		DebugMode:      false,
@@ -63,16 +67,20 @@ func NewDocServer(clusterId string, config *DocConfig) *DocServer {
 		Cors:           nil,
 		LogCnf:         nil,
 	})
-	return NewDocServerWithEngine(e, clusterId, config)
+	return newDocServerWithEngine(e, clusterId, config)
 }
 
-func NewDocServerWithEngine(e *gin.Engine, clusterId string, config *DocConfig) *DocServer {
+func newDocServerWithEngine(e *gin.Engine, clusterId string, config *DocConfig) *DocServer {
 	s := &DocServer{
-		config:    config,
-		engine:    e,
-		Manager:   doc.NewManager(),
-		moduleDoc: "/docs/:md", // the same prefix with the socket handler
+		config:  config,
+		engine:  e,
+		Manager: doc.NewManager(),
+		prefix:  utils.ToStr("/", config.endType.String(), "-", config.servType.String(), "-docs"), // the same prefix with the socket handler
 	}
+	if config.GwPrefix != "" {
+		s.prefix = config.GwPrefix + s.prefix
+	}
+	config.Doc.path = s.prefix + "/gateway/gateway"
 	public := "0"
 	if config.Doc.Public {
 		public = "1"
@@ -95,14 +103,11 @@ func NewDocServerWithEngine(e *gin.Engine, clusterId string, config *DocConfig) 
 			"public": public,
 		},
 	}
-	s.initDocRoute()
-	if s.config.socketGateway {
-		if err := s.initTemplate(); err != nil {
-			log.Println(err.Error())
-		}
-		s.initIndexRoute()
-		s.initServerProxyDocRoute()
+	if err := s.initTemplate(); err != nil {
+		log.Println(err.Error())
 	}
+	s.initModuleRoute()
+	s.initKeyRoute()
 
 	return s
 }
@@ -111,6 +116,7 @@ func (s *DocServer) RegInfo() *regCenter.RegInfo {
 	return s.regInfo
 }
 
+// gateway及handler 文档主页模版
 func (s *DocServer) initTemplate() error {
 	t := template.New("socket-gw-index.tmpl")
 	tmpl, _ := asset.Asset("service/doc/html/index.tmpl")
@@ -122,11 +128,12 @@ func (s *DocServer) initTemplate() error {
 	return nil
 }
 
-func (s *DocServer) initIndexRoute() {
+// gateway及handler 模块主页
+func (s *DocServer) initModuleRoute() {
 	// 一个模块的文档（便于一个模块一个模块提供而不是全部提供）
 	hd := func(c *gin.Context) {
 		var gwUrls = make(doc.ModuleDoc)
-		// 非网管模块 一直显示网关文档
+		// 非gateway模块 一直显示网关文档
 		if c.Param("md") != "gateway" {
 			gwUrls, _ = s.Manager.GetModuleDocs("gateway")
 		}
@@ -148,13 +155,9 @@ func (s *DocServer) initIndexRoute() {
 			"title":   title,
 			"gateway": gwUrls,
 			"urls":    publicUrls,
-			"suf":     "." + s.config.servType.String() + "doc",
 		})
 	}
-	s.engine.GET(s.moduleDoc, hd)
-	if s.config.Prefix != "" {
-		s.engine.GET(s.config.Prefix+"/"+s.moduleDoc, hd)
-	}
+	s.engine.GET(s.prefix+"/:md", hd) //gateway及handler 模块主页路由
 }
 
 func (s *DocServer) docHd(c *gin.Context) {
@@ -173,14 +176,7 @@ func (s *DocServer) docHd(c *gin.Context) {
 	}
 }
 
-func (s *DocServer) initDocRoute() {
-	s.engine.GET(s.config.Doc.Path, s.docHd)
-	if s.config.Doc.Prefix != "" {
-		s.engine.GET(s.config.Doc.Prefix+"/"+s.config.Doc.Path, s.docHd)
-	}
-}
-
-func (s *DocServer) initServerProxyDocRoute() {
+func (s *DocServer) initKeyRoute() {
 	hd := func(c *gin.Context) {
 		cacheTtl := s.config.CacheTtl
 		if cacheTtl <= 0 {
@@ -190,7 +186,7 @@ func (s *DocServer) initServerProxyDocRoute() {
 			s.docHd(c)
 			return
 		}
-		k := strings.TrimSuffix(c.Param("key"), "."+s.config.servType.String()+"doc")
+		k := c.Param("key")
 		c.Header("Cache-control", "private,max-age="+strconv.Itoa(cacheTtl))
 		if addr := s.Manager.GetRandKeyDoc(c.Param("md"), k); addr == "" {
 			c.String(404, "Sub doc url not found.")
@@ -205,10 +201,7 @@ func (s *DocServer) initServerProxyDocRoute() {
 			p.ServeHTTP(c.Writer, c.Request)
 		}
 	}
-	s.engine.GET(s.moduleDoc+"/:key", hd)
-	if s.config.Prefix != "" {
-		s.engine.GET(s.config.Prefix+"/"+s.moduleDoc+"/:key", hd)
-	}
+	s.engine.GET(s.prefix+"/:md/:key", hd) // key 路由
 }
 
 func (s *DocServer) Start() error {
@@ -219,19 +212,11 @@ func (s *DocServer) Start() error {
 }
 
 func (s *DocServer) DocUrl() string {
-	return s.config.Origin.String() + s.config.Doc.Path
+	return s.config.Origin.String() + s.config.Doc.path
 }
 
 func (s *DocServer) IndexDocUrl() string {
-	return s.config.Origin.String() + s.moduleDoc
-}
-
-func (s *DocServer) PrefixedModuleDocUrl(module string) string {
-	return s.config.Origin.String() + s.config.Prefix + "/" + strings.TrimLeft(strings.Replace(s.moduleDoc, ":md", module, 1), "/")
-}
-
-func (s *DocServer) ModuleDocUrl(module string) string {
-	return s.config.Origin.String() + strings.Replace(s.moduleDoc, ":md", module, 1)
+	return s.config.Origin.String() + s.prefix + "/:md"
 }
 
 func (s *DocServer) SyncStart(cb func(error)) {
