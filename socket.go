@@ -2,7 +2,6 @@ package socketgateway
 
 import (
 	"errors"
-	"github.com/gin-gonic/gin"
 	"github.com/obnahsgnaw/application"
 	"github.com/obnahsgnaw/application/endtype"
 	"github.com/obnahsgnaw/application/pkg/logging/logger"
@@ -37,7 +36,10 @@ import (
 
 const closeAction = 0
 
-// socket, rpc, doc, 注册socket-gateway、发现socket-gateway、发现socket-server
+// socket-tcp,websocket, rpc-rpc, doc-api, 注册socket-gateway、发现socket-gateway、发现socket-server
+// socket port === required
+// rpc    port === optional，enabled to discover handler and sub doc
+// api    port === optional, for doc view page
 
 type Server struct {
 	id              string // 模块-子模块
@@ -58,8 +60,8 @@ type Server struct {
 	rsCus           bool
 	ds              *DocServer
 	dsCus           bool
-	dsPrefixed      bool // 自定义外部引擎时，多个文档路径冲突，指定外部引擎时或者单独的引擎手动指定增加前缀保持一致（用于有个集中服务包含很多，又有单独的服务）
 	logger          *zap.Logger
+	logCnf          *logger.Config
 	handlerRegInfo  *regCenter.RegInfo
 	errs            []error
 	poll            bool
@@ -101,13 +103,13 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 	if s.st == "" {
 		s.addErr(errors.New(s.msg("type not support")))
 	}
-	logCnf := logger.CopyCnfWithLevel(s.app.LogConfig())
-	if logCnf != nil {
-		logCnf.AddSubDir(filepath.Join(s.et.String(), utils.ToStr(s.st.String(), "-", s.id)))
-		logCnf.SetFilename(utils.ToStr(s.st.String(), "-", s.id))
-		logCnf.ReplaceTraceLevel(zap.NewAtomicLevelAt(zap.FatalLevel))
+	s.logCnf = logger.CopyCnfWithLevel(s.app.LogConfig())
+	if s.logCnf != nil {
+		s.logCnf.AddSubDir(filepath.Join(s.et.String(), utils.ToStr(s.st.String(), "-", s.id)))
+		s.logCnf.SetFilename(utils.ToStr(s.st.String(), "-", s.id))
+		s.logCnf.ReplaceTraceLevel(zap.NewAtomicLevelAt(zap.FatalLevel))
 	}
-	s.logger, err = logger.New(utils.ToStr(s.st.String(), "-gateway"), logCnf, app.Debugger().Debug())
+	s.logger, err = logger.New(utils.ToStr(s.st.String(), "-gateway"), s.logCnf, app.Debugger().Debug())
 	s.addErr(err)
 	s.regInfo = &regCenter.RegInfo{
 		AppId:   s.app.ID(),
@@ -146,163 +148,24 @@ func (s *Server) With(options ...Option) {
 	}
 }
 
-// ID return the api service id
+// ID return the service id
 func (s *Server) ID() string {
 	return s.id
 }
 
-// Name return the api service name
+// Name return the service name
 func (s *Server) Name() string {
 	return s.name
 }
 
-// Type return the api server end type
+// Type return the server end type
 func (s *Server) Type() servertype.ServerType {
 	return s.st
 }
 
-// EndType return the api server end type
+// EndType return the server end type
 func (s *Server) EndType() endtype.EndType {
 	return s.et
-}
-
-// RegEnabled reg http
-func (s *Server) RegEnabled() bool {
-	return s.regEnable
-}
-
-// RegInfo return the server register info
-func (s *Server) RegInfo() *regCenter.RegInfo {
-	return s.regInfo
-}
-
-// Logger return the logger
-func (s *Server) Logger() *zap.Logger {
-	return s.logger
-}
-
-// new rpc server for socket
-func (s *Server) withRpcServer(port int) *rpc2.Server {
-	s.rs = rpc2.New(s.app, s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s.et, url.Host{
-		Ip:   s.host.Ip,
-		Port: port,
-	}, rpc2.RegEnable(), rpc2.Parent(s))
-
-	return s.rs
-}
-
-func (s *Server) initRpc() {
-	if s.rs != nil {
-		s.rs.RegisterService(rpc2.ServiceInfo{
-			Desc: bindv1.BindService_ServiceDesc,
-			Impl: impl.NewBindService(func() *socket.Server { return s.ss }),
-		})
-		s.rs.RegisterService(rpc2.ServiceInfo{
-			Desc: connv1.ConnService_ServiceDesc,
-			Impl: impl.NewConnService(func() *socket.Server { return s.ss }),
-		})
-		s.rs.RegisterService(rpc2.ServiceInfo{
-			Desc: groupv1.GroupService_ServiceDesc,
-			Impl: impl.NewGroupService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
-		})
-		s.rs.RegisterService(rpc2.ServiceInfo{
-			Desc: messagev1.MessageService_ServiceDesc,
-			Impl: impl.NewMessageService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
-		})
-		s.rs.RegisterService(rpc2.ServiceInfo{
-			Desc: slbv1.SlbService_ServiceDesc,
-			Impl: impl.NewSlbService(func() *socket.Server { return s.ss }),
-		})
-		s.m.With(action.CloseAction(closeAction))
-		s.m.With(action.Gateway(s.rs.Host()))
-		s.m.With(action.RtHandler(impl.NewRemoteHandler(s.logger)))
-	}
-}
-
-func (s *Server) withRpcServerIns(ins *rpc2.Server) {
-	s.rs = ins
-	s.rsCus = true
-	s.rs.AddRegInfo(s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s)
-}
-
-// withDocServerIns doc server
-func (s *Server) withDocServerIns(e *gin.Engine, ePort int, docProxyPrefix string) {
-	s.dsCus = true
-	s.ds = NewDocServerWithEngine(e, s.app.ID(), s.docConfig(ePort, docProxyPrefix))
-}
-
-func (s *Server) withDocServer(port int, docProxyPrefix string, projPrefixed bool) *DocServer {
-	s.dsPrefixed = projPrefixed
-	s.ds = NewDocServer(s.app.ID(), s.docConfig(port, docProxyPrefix))
-	return s.ds
-}
-
-func (s *Server) docConfig(port int, docProxyPrefix string) *DocConfig {
-	if docProxyPrefix != "" {
-		docProxyPrefix = "/" + strings.Trim(docProxyPrefix, "/")
-	}
-
-	docName := "docs"
-	if s.dsCus || s.dsPrefixed {
-		docName = utils.ToStr(s.et.String(), "-", s.st.String(), "-docs")
-	}
-	return &DocConfig{
-		id:       s.id,
-		endType:  s.et,
-		servType: s.st,
-		Origin: url.Origin{
-			Protocol: url.HTTP,
-			Host: url.Host{
-				Ip:   s.host.Ip,
-				Port: port,
-			},
-		},
-		RegTtl:        s.app.RegTtl(),
-		Prefix:        docProxyPrefix,
-		socketGateway: true,
-		Doc: DocItem{
-			socketType: s.sct,
-			Path:       utils.ToStr("/", docName, "/gateway/gateway."+s.st.String()+"doc"), // the same with the socket handler,
-			Prefix:     docProxyPrefix + "/docs",
-			Title:      s.name,
-			Public:     true,
-			Provider: func() ([]byte, error) {
-				return asset.Asset("service/doc/html/gateway.html")
-			},
-		},
-		debug: s.routeDebug,
-	}
-}
-
-func (s *Server) watchLog(watcher eventhandler.LogWatcher) {
-	s.regEo(eventhandler.Watcher(watcher))
-}
-
-func (s *Server) Engine() *socket.Server {
-	return s.ss
-}
-
-func (s *Server) addTicker(name string, ticker eventhandler.TickHandler) {
-	s.regEo(eventhandler.Ticker(name, ticker))
-}
-
-func (s *Server) Listen(act codec.Action, structure action.DataStructure, handler action.Handler) {
-	s.actListeners = append(s.actListeners, func(manager *action.Manager) {
-		manager.RegisterHandlerAction(act, structure, handler)
-		s.logger.Debug("listened action:" + act.Name)
-	})
-}
-
-func (s *Server) Send(c socket.Conn, id codec.Action, data codec.DataPtr) (err error) {
-	return s.e.SendAction(c, id, data)
-}
-
-func (s *Server) regEo(option eventhandler.Option) {
-	s.eo = append(s.eo, option)
-}
-
-func (s *Server) Rpc() *rpc2.Server {
-	return s.rs
 }
 
 func (s *Server) Release() {
@@ -326,10 +189,6 @@ func (s *Server) Release() {
 	}
 }
 
-func (s *Server) setSocketEngine(engine socket.Engine) {
-	s.se = engine
-}
-
 func (s *Server) Run(failedCb func(error)) {
 	if s.errs != nil {
 		failedCb(s.errs[0])
@@ -342,7 +201,7 @@ func (s *Server) Run(failedCb func(error)) {
 	} else {
 		s.logger.Info("socket engine initialize(customer)")
 	}
-	s.regEo(eventhandler.Logger(s.logger))
+	s.addEventOption(eventhandler.Logger(s.logger))
 	s.e = eventhandler.New(s.app.Context(), s.m, s.sct, s.eo...)
 	s.ss = socket.New(s.app.Context(), s.sct, s.host.Port, s.se, s.e, &socket.Config{
 		MultiCore: true,
@@ -374,7 +233,7 @@ func (s *Server) Run(failedCb func(error)) {
 	}
 	if s.ds != nil {
 		s.logger.Info("doc server enabled, init start...")
-		s.logger.Info(utils.ToStr("doc index url=", s.ds.IndexDocUrl(), ", gateway doc url=", s.ds.DocUrl()))
+		s.logger.Info(utils.ToStr("doc index url=", s.ds.IndexDocUrl(), ", doc url=", s.ds.DocUrl()))
 		if !s.dsCus {
 			docDesc := utils.ToStr("doc server[", s.ds.config.Origin.Host.String(), "] ")
 			s.logger.Info(docDesc + "start and serving...")
@@ -436,6 +295,109 @@ func (s *Server) Run(failedCb func(error)) {
 	}
 	s.logger.Info(utils.ToStr("socket[", s.host.String(), "] start and serving..."))
 	s.ss.SyncStart(failedCb)
+}
+
+func (s *Server) Listen(act codec.Action, structure action.DataStructure, handler action.Handler) {
+	s.actListeners = append(s.actListeners, func(manager *action.Manager) {
+		manager.RegisterHandlerAction(act, structure, handler)
+		s.logger.Debug("listened action:" + act.Name)
+	})
+}
+
+func (s *Server) Send(c socket.Conn, id codec.Action, data codec.DataPtr) (err error) {
+	return s.e.SendAction(c, id, data)
+}
+
+// RegEnabled reg http
+func (s *Server) RegEnabled() bool {
+	return s.regEnable
+}
+
+// RegInfo return the server register info
+func (s *Server) RegInfo() *regCenter.RegInfo {
+	return s.regInfo
+}
+
+// Logger return the logger
+func (s *Server) Logger() *zap.Logger {
+	return s.logger
+}
+
+func (s *Server) LogConfig() *logger.Config {
+	return s.logCnf
+}
+
+func (s *Server) Engine() *socket.Server {
+	return s.ss
+}
+
+func (s *Server) Rpc() *rpc2.Server {
+	return s.rs
+}
+
+func (s *Server) DocServer() *DocServer {
+	return s.ds
+}
+
+func (s *Server) initRpc() {
+	if s.rs != nil {
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: bindv1.BindService_ServiceDesc,
+			Impl: impl.NewBindService(func() *socket.Server { return s.ss }),
+		})
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: connv1.ConnService_ServiceDesc,
+			Impl: impl.NewConnService(func() *socket.Server { return s.ss }),
+		})
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: groupv1.GroupService_ServiceDesc,
+			Impl: impl.NewGroupService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
+		})
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: messagev1.MessageService_ServiceDesc,
+			Impl: impl.NewMessageService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
+		})
+		s.rs.RegisterService(rpc2.ServiceInfo{
+			Desc: slbv1.SlbService_ServiceDesc,
+			Impl: impl.NewSlbService(func() *socket.Server { return s.ss }),
+		})
+		s.m.With(action.CloseAction(closeAction))
+		s.m.With(action.Gateway(s.rs.Host()))
+		s.m.With(action.RtHandler(impl.NewRemoteHandler(s.logger)))
+	}
+}
+
+func (s *Server) docConfig(port int, proxyPrefix string) *DocConfig {
+	if proxyPrefix != "" {
+		proxyPrefix = "/" + strings.Trim(proxyPrefix, "/")
+	}
+	return &DocConfig{
+		id:       s.id,
+		endType:  s.et,
+		servType: s.st,
+		Origin: url.Origin{
+			Protocol: url.HTTP,
+			Host: url.Host{
+				Ip:   s.host.Ip,
+				Port: port,
+			},
+		},
+		RegTtl:   s.app.RegTtl(),
+		GwPrefix: proxyPrefix,
+		Doc: DocItem{
+			socketType: s.sct,
+			Title:      s.name,
+			Public:     true,
+			Provider: func() ([]byte, error) {
+				return asset.Asset("service/doc/html/gateway.html")
+			},
+		},
+		debug: s.routeDebug,
+	}
+}
+
+func (s *Server) addEventOption(option eventhandler.Option) {
+	s.eo = append(s.eo, option)
 }
 
 func (s *Server) socketGwError(msg string, err error) error {

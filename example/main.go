@@ -11,7 +11,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"log"
+	"strconv"
 	"time"
 )
 
@@ -33,9 +33,9 @@ func main() {
 	s := socketgateway.New(app, sockettype.TCP, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
 	s.With(socketgateway.Engine(gnet.New()))
 	s.With(socketgateway.RpcServer(8002))
-	s.With(socketgateway.DocServ(8003, "/v1/doc/socket/tcp", true))
+	s.With(socketgateway.DocServ(8003, "/v1/doc/socket/tcp"))
 	s.With(socketgateway.Watcher(func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field) {
-		log.Println(msg)
+		s.Logger().Debug(strconv.Itoa(c.Fd()) + ": " + msg)
 	}))
 	s.With(socketgateway.ReuseAddr())
 	app.AddServer(s)

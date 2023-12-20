@@ -2,6 +2,8 @@ package socketgateway
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/obnahsgnaw/application/pkg/url"
+	"github.com/obnahsgnaw/application/pkg/utils"
 	rpc2 "github.com/obnahsgnaw/rpc"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
@@ -37,27 +39,27 @@ func ReuseAddr() Option {
 
 func AuthCheck(interval time.Duration) Option {
 	return func(s *Server) {
-		s.regEo(eventhandler.AuthCheck(interval))
+		s.addEventOption(eventhandler.AuthCheck(interval))
 	}
 }
 
 func Heartbeat(interval time.Duration) Option {
 	return func(s *Server) {
-		s.regEo(eventhandler.Heartbeat(interval))
+		s.addEventOption(eventhandler.Heartbeat(interval))
 	}
 }
 
 func Auth(address string) Option {
 	return func(s *Server) {
 		s.authAddress = address
-		s.regEo(eventhandler.Auth())
+		s.addEventOption(eventhandler.Auth())
 	}
 }
 
 func Tick(interval time.Duration) Option {
 	return func(s *Server) {
 		s.tickInterval = interval
-		s.regEo(eventhandler.Tick(interval))
+		s.addEventOption(eventhandler.Tick(interval))
 	}
 }
 
@@ -65,60 +67,66 @@ func Crypto(crypto eventhandler.Cryptor, noAuthKey []byte) Option {
 	return func(s *Server) {
 		s.crypto = crypto
 		s.noAuthStaticKey = noAuthKey
-		s.regEo(eventhandler.Crypto(crypto, noAuthKey))
+		s.addEventOption(eventhandler.Crypto(crypto, noAuthKey))
 	}
 }
 
 func CodecProvider(p codec.Provider) Option {
 	return func(s *Server) {
-		s.regEo(eventhandler.CodecProvider(p))
+		s.addEventOption(eventhandler.CodecProvider(p))
 	}
 }
 
 func CodedProvider(p codec.DataBuilderProvider) Option {
 	return func(s *Server) {
-		s.regEo(eventhandler.CodedProvider(p))
+		s.addEventOption(eventhandler.CodedProvider(p))
 	}
 }
 
 func RpcServerIns(ins *rpc2.Server) Option {
 	return func(s *Server) {
-		s.withRpcServerIns(ins)
+		s.rs = ins
+		s.rsCus = true
+		s.rs.AddRegInfo(s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s)
 	}
 }
 
 func RpcServer(port int) Option {
 	return func(s *Server) {
-		s.withRpcServer(port)
+		s.rs = rpc2.New(s.app, s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s.et, url.Host{
+			Ip:   s.host.Ip,
+			Port: port,
+		}, rpc2.RegEnable(), rpc2.Parent(s))
 	}
 }
 
-func DocServerIns(e *gin.Engine, ePort int, docProxyPrefix string) Option {
+func DocServerIns(e *gin.Engine, ePort int, proxyPrefix string) Option {
 	return func(s *Server) {
-		s.withDocServerIns(e, ePort, docProxyPrefix)
+		s.dsCus = true
+		s.ds = newDocServerWithEngine(e, s.app.ID(), s.docConfig(ePort, proxyPrefix))
 	}
 }
 
-func DocServ(port int, docProxyPrefix string, projPrefixed bool) Option {
+func DocServ(port int, proxyPrefix string) Option {
 	return func(s *Server) {
-		s.withDocServer(port, docProxyPrefix, projPrefixed)
+		s.ds = newDocServer(s.app.ID(), s.docConfig(port, proxyPrefix))
 	}
 }
 
 func Watcher(watcher eventhandler.LogWatcher) Option {
 	return func(s *Server) {
-		s.watchLog(watcher)
+		s.addEventOption(eventhandler.Watcher(watcher))
 	}
 }
 
 func Ticker(name string, ticker eventhandler.TickHandler) Option {
 	return func(s *Server) {
-		s.addTicker(name, ticker)
+		s.addEventOption(eventhandler.Ticker(name, ticker))
 	}
 }
 
 func Engine(e socket.Engine) Option {
 	return func(s *Server) {
-		s.setSocketEngine(e)
+		s.se = e
 	}
 }
