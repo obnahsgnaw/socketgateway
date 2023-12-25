@@ -1,9 +1,8 @@
 package socketgateway
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/obnahsgnaw/application/pkg/url"
 	"github.com/obnahsgnaw/application/pkg/utils"
+	"github.com/obnahsgnaw/http"
 	rpc2 "github.com/obnahsgnaw/rpc"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
@@ -16,12 +15,6 @@ type Option func(s *Server)
 func RegEnable() Option {
 	return func(s *Server) {
 		s.regEnable = true
-	}
-}
-
-func RouteDebug() Option {
-	return func(s *Server) {
-		s.routeDebug = true
 	}
 }
 
@@ -83,33 +76,18 @@ func CodedProvider(p codec.DataBuilderProvider) Option {
 	}
 }
 
-func RpcServerIns(ins *rpc2.Server) Option {
+func Rpc(ins *rpc2.Server, runable bool) Option {
 	return func(s *Server) {
 		s.rs = ins
-		s.rsCus = true
-		s.rs.AddRegInfo(s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s)
+		s.rpsIgRun = !runable
+		s.rs.AddRegInfo(s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, s.st))
 	}
 }
 
-func RpcServer(port int) Option {
+func Doc(e *http.Http, proxyPrefix string, runable bool) Option {
 	return func(s *Server) {
-		s.rs = rpc2.New(s.app, s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), s.et, url.Host{
-			Ip:   s.host.Ip,
-			Port: port,
-		}, rpc2.RegEnable(), rpc2.Parent(s))
-	}
-}
-
-func DocServerIns(e *gin.Engine, ePort int, proxyPrefix string) Option {
-	return func(s *Server) {
-		s.dsCus = true
-		s.ds = newDocServerWithEngine(e, s.app.ID(), s.docConfig(ePort, proxyPrefix))
-	}
-}
-
-func DocServ(port int, proxyPrefix string) Option {
-	return func(s *Server) {
-		s.ds = newDocServer(s.app.ID(), s.docConfig(port, proxyPrefix))
+		s.dsIgRun = !runable
+		s.ds = newDocServerWithEngine(e, s.app.ID(), s.docConfig(proxyPrefix))
 	}
 }
 

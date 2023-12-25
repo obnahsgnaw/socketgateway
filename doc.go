@@ -30,12 +30,10 @@ type DocConfig struct {
 	id       string
 	endType  endtype.EndType
 	servType servertype.ServerType
-	Origin   url.Origin
 	RegTtl   int64
 	GwPrefix string // 大前缀
 	CacheTtl int
 	Doc      DocItem
-	debug    bool
 }
 
 type DocItem struct {
@@ -48,34 +46,25 @@ type DocItem struct {
 
 type DocServer struct {
 	config  *DocConfig
-	engine  *gin.Engine
+	engine  *http2.Http
 	Manager *doc.Manager
 	regInfo *regCenter.RegInfo
 	prefix  string
+	origin  url.Origin
 }
 
 // doc-index --> id-list --> key list
 
-func newDocServer(clusterId string, config *DocConfig) *DocServer {
-	e, _ := http2.New(&http2.Config{
-		Name:           config.id,
-		DebugMode:      false,
-		LogDebug:       true,
-		AccessWriter:   nil,
-		ErrWriter:      nil,
-		TrustedProxies: nil,
-		Cors:           nil,
-		LogCnf:         nil,
-	})
-	return newDocServerWithEngine(e, clusterId, config)
-}
-
-func newDocServerWithEngine(e *gin.Engine, clusterId string, config *DocConfig) *DocServer {
+func newDocServerWithEngine(e *http2.Http, clusterId string, config *DocConfig) *DocServer {
 	s := &DocServer{
 		config:  config,
 		engine:  e,
 		Manager: doc.NewManager(),
 		prefix:  utils.ToStr("/", config.endType.String(), "-", config.servType.String(), "-docs"), // the same prefix with the socket handler
+		origin: url.Origin{
+			Protocol: url.HTTP,
+			Host:     e.Host(),
+		},
 	}
 	if config.GwPrefix != "" {
 		s.prefix = config.GwPrefix + s.prefix
@@ -94,7 +83,7 @@ func newDocServerWithEngine(e *gin.Engine, clusterId string, config *DocConfig) 
 			Type:    config.Doc.socketType.String(),
 			EndType: config.endType.String(),
 		},
-		Host: config.Origin.Host.String(),
+		Host: s.engine.Host().String(),
 		Val:  "",
 		Ttl:  config.RegTtl,
 		Values: map[string]string{
@@ -124,7 +113,7 @@ func (s *DocServer) initTemplate() error {
 	if err != nil {
 		return err
 	}
-	s.engine.SetHTMLTemplate(t)
+	s.engine.Engine().SetHTMLTemplate(t)
 	return nil
 }
 
@@ -157,7 +146,7 @@ func (s *DocServer) initModuleRoute() {
 			"urls":    publicUrls,
 		})
 	}
-	s.engine.GET(s.prefix+"/:md", hd) //gateway及handler 模块主页路由
+	s.engine.Engine().GET(s.prefix+"/:md", hd) //gateway及handler 模块主页路由
 }
 
 func (s *DocServer) docHd(c *gin.Context) {
@@ -201,22 +190,22 @@ func (s *DocServer) initKeyRoute() {
 			p.ServeHTTP(c.Writer, c.Request)
 		}
 	}
-	s.engine.GET(s.prefix+"/:md/:key", hd) // key 路由
+	s.engine.Engine().GET(s.prefix+"/:md/:key", hd) // key 路由
 }
 
 func (s *DocServer) Start() error {
-	if err := s.engine.Run(s.config.Origin.Host.String()); err != nil {
+	if err := s.engine.Run(); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (s *DocServer) DocUrl() string {
-	return s.config.Origin.String() + s.config.Doc.path
+	return s.origin.String() + s.config.Doc.path
 }
 
 func (s *DocServer) IndexDocUrl() string {
-	return s.config.Origin.String() + s.prefix + "/:md"
+	return s.origin.String() + s.prefix + "/:md"
 }
 
 func (s *DocServer) SyncStart(cb func(error)) {

@@ -57,16 +57,15 @@ type Server struct {
 	se              socket.Engine
 	regInfo         *regCenter.RegInfo
 	rs              *rpc2.Server
-	rsCus           bool
+	rpsIgRun        bool
 	ds              *DocServer
-	dsCus           bool
+	dsIgRun         bool
 	logger          *zap.Logger
 	logCnf          *logger.Config
 	handlerRegInfo  *regCenter.RegInfo
 	errs            []error
 	poll            bool
 	regEnable       bool
-	routeDebug      bool
 	reuseAddr       bool
 	keepalive       uint
 	tickInterval    time.Duration
@@ -234,8 +233,8 @@ func (s *Server) Run(failedCb func(error)) {
 	if s.ds != nil {
 		s.logger.Info("doc server enabled, init start...")
 		s.logger.Info(utils.ToStr("doc index url=", s.ds.IndexDocUrl(), ", doc url=", s.ds.DocUrl()))
-		if !s.dsCus {
-			docDesc := utils.ToStr("doc server[", s.ds.config.Origin.Host.String(), "] ")
+		if !s.dsIgRun {
+			docDesc := utils.ToStr("doc server[", s.ds.engine.Host().String(), "] ")
 			s.logger.Info(docDesc + "start and serving...")
 			s.ds.SyncStart(failedCb)
 		}
@@ -289,7 +288,7 @@ func (s *Server) Run(failedCb func(error)) {
 	if s.rs != nil {
 		s.logger.Info("rpc server enabled, init start...")
 		s.initRpc()
-		if !s.rsCus {
+		if !s.rpsIgRun {
 			s.rs.Run(failedCb)
 		}
 	}
@@ -363,11 +362,11 @@ func (s *Server) initRpc() {
 		})
 		s.m.With(action.CloseAction(closeAction))
 		s.m.With(action.Gateway(s.rs.Host()))
-		s.m.With(action.RtHandler(impl.NewRemoteHandler(s.logger)))
+		s.m.With(action.RtHandler(impl.NewRemoteHandler(s.logger, impl.St2hct(s.sct))))
 	}
 }
 
-func (s *Server) docConfig(port int, proxyPrefix string) *DocConfig {
+func (s *Server) docConfig(proxyPrefix string) *DocConfig {
 	if proxyPrefix != "" {
 		proxyPrefix = "/" + strings.Trim(proxyPrefix, "/")
 	}
@@ -375,13 +374,6 @@ func (s *Server) docConfig(port int, proxyPrefix string) *DocConfig {
 		id:       s.id,
 		endType:  s.et,
 		servType: s.st,
-		Origin: url.Origin{
-			Protocol: url.HTTP,
-			Host: url.Host{
-				Ip:   s.host.Ip,
-				Port: port,
-			},
-		},
 		RegTtl:   s.app.RegTtl(),
 		GwPrefix: proxyPrefix,
 		Doc: DocItem{
@@ -392,7 +384,6 @@ func (s *Server) docConfig(port int, proxyPrefix string) *DocConfig {
 				return asset.Asset("service/doc/html/gateway.html")
 			},
 		},
-		debug: s.routeDebug,
 	}
 }
 
