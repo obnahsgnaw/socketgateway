@@ -7,8 +7,8 @@ require (
 	github.com/gobwas/ws v1.2.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/obnahsgnaw/application v0.16.0
-	github.com/obnahsgnaw/http v0.1.1
-	github.com/obnahsgnaw/rpc v0.5.9
+	github.com/obnahsgnaw/http v0.1.3
+	github.com/obnahsgnaw/rpc v0.5.10
 	github.com/obnahsgnaw/socketapi v0.5.2
 	github.com/obnahsgnaw/socketutil v0.8.0
 	github.com/panjf2000/gnet/v2 v2.2.9
@@ -41,6 +41,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/panjf2000/ants/v2 v2.7.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
+	github.com/soheilhy/cmux v0.1.5 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.9 // indirect
