@@ -1,4 +1,12 @@
 
+<a name="v0.23.13"></a>
+## [v0.23.13](https://8.140.161.172/wangsb/wgateway/compare/v0.23.12...v0.23.13) (2024-01-26)
+
+### Bug Fixes
+
+* **service action and pkg group:** fix for
+
+
 <a name="v0.23.12"></a>
 ## [v0.23.12](https://8.140.161.172/wangsb/wgateway/compare/v0.23.11...v0.23.12) (2023-12-29)
 
