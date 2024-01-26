@@ -62,12 +62,19 @@ func (g *Group) Leave(fd int) {
 func (g *Group) Broadcast(handle func(fd int, id string)) {
 	pool := goroutine.Default()
 	defer pool.Release()
+
+	var wg sync.WaitGroup
 	g.RangeMembers(func(fd int, id string) bool {
-		_ = pool.Submit(func() {
-			handle(fd, id)
-		})
+		wg.Add(1)
+		_ = pool.Submit(func(fd1 int, id1 string) func() {
+			return func() {
+				handle(fd1, id1)
+				wg.Done()
+			}
+		}(fd, id))
 		return true
 	})
+	wg.Wait()
 }
 
 func (g *Group) Destroy() {
