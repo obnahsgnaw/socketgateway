@@ -55,17 +55,24 @@ func (m *Manager) With(options ...Option) {
 
 // HandleClose handle the close action
 func (m *Manager) HandleClose(c socket.Conn) {
-	pool := goroutine.Default()
-	defer pool.Release()
 	if _, _, h, ok := m.getHandler(m.closeAction); ok {
 		h(c, nil)
 	}
+	pool := goroutine.Default()
+	defer pool.Release()
+	var wg sync.WaitGroup
 	for _, s := range m.getServers(m.closeAction) {
 		if m.remoteHandler != nil {
-			_ = pool.Submit(func() {
-				_, _, _ = m.remoteHandler.Call(s, m.gateway.String(), "", c, m.closeAction, nil)
-			})
+			wg.Add(1)
+			_ = pool.Submit(m.closeTask(c, s, &wg))
 		}
+	}
+	wg.Wait()
+}
+func (m *Manager) closeTask(c socket.Conn, gw string, wg *sync.WaitGroup) func() {
+	return func() {
+		_, _, _ = m.remoteHandler.Call(gw, m.gateway.String(), "", c, m.closeAction, nil)
+		wg.Done()
 	}
 }
 
