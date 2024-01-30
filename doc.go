@@ -31,7 +31,6 @@ type DocConfig struct {
 	endType  endtype.EndType
 	servType servertype.ServerType
 	RegTtl   int64
-	GwPrefix string // 大前缀
 	CacheTtl int
 	Doc      DocItem
 }
@@ -65,9 +64,6 @@ func newDocServerWithEngine(e *http2.Http, clusterId string, config *DocConfig) 
 			Protocol: url.HTTP,
 			Host:     e.Host(),
 		},
-	}
-	if config.GwPrefix != "" {
-		s.prefix = config.GwPrefix + s.prefix
 	}
 	config.Doc.path = s.prefix + "/gateway/gateway"
 	public := "0"
