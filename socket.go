@@ -366,16 +366,12 @@ func (s *Server) initRpc() {
 	}
 }
 
-func (s *Server) docConfig(proxyPrefix string) *DocConfig {
-	if proxyPrefix != "" {
-		proxyPrefix = "/" + strings.Trim(proxyPrefix, "/")
-	}
+func (s *Server) docConfig() *DocConfig {
 	return &DocConfig{
 		id:       s.id,
 		endType:  s.et,
 		servType: s.st,
 		RegTtl:   s.app.RegTtl(),
-		GwPrefix: proxyPrefix,
 		Doc: DocItem{
 			socketType: s.sct,
 			Title:      s.name,

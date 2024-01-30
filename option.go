@@ -84,10 +84,10 @@ func Rpc(ins *rpc2.Server, runable bool) Option {
 	}
 }
 
-func Doc(e *http.Http, proxyPrefix string, runable bool) Option {
+func Doc(e *http.Http, runable bool) Option {
 	return func(s *Server) {
 		s.dsIgRun = !runable
-		s.ds = newDocServerWithEngine(e, s.app.ID(), s.docConfig(proxyPrefix))
+		s.ds = newDocServerWithEngine(e, s.app.ID(), s.docConfig())
 	}
 }
 
