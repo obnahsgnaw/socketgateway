@@ -1,4 +1,12 @@
 
+<a name="v0.23.15"></a>
+## [v0.23.15](https://8.140.161.172/wangsb/wgateway/compare/v0.23.14...v0.23.15) (2024-02-05)
+
+### Bug Fixes
+
+* **socket.go:** fix auth
+
+
 <a name="v0.23.14"></a>
 ## [v0.23.14](https://8.140.161.172/wangsb/wgateway/compare/v0.23.13...v0.23.14) (2024-01-30)
 
