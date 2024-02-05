@@ -431,27 +431,31 @@ func (s *Server) defaultListen() {
 					s.Logger().Error(s.msg("auth action forward error: err=" + err.Error()))
 					return
 				}
-				rq.Header.Set("Authorization", "soc "+q.Token)
+				rq.Header.Set("Authorization", "socket "+q.Token)
 				client := &http.Client{}
 				resp, err := client.Do(rq)
 				if err != nil {
 					s.Logger().Error(s.msg("auth action request resp error: err=" + err.Error()))
 					response.Success = false
-				}
-				if resp.StatusCode >= http.StatusMultipleChoices {
-					response.Success = false
 				} else {
-					response.Success = true
-					uidStr := resp.Header.Get("X-User-Id")
-					uid, _ := strconv.Atoi(uidStr)
-					uname := resp.Header.Get("X-User-Name")
-					c.Context().Auth(&socket.AuthUser{
-						Id:   uint(uid),
-						Name: uname,
-					})
-					key := s.crypto.Type().RandKey()
-					c.Context().SetOptional("cryptKey", key)
-					response.CryptKey = key
+					if resp.StatusCode != http.StatusOK {
+						response.Success = false
+					} else {
+						response.Success = true
+						uidStr := resp.Header.Get("X-Authed-User-Id")
+						uid, _ := strconv.Atoi(uidStr)
+						uname := resp.Header.Get("X-Authed-User-Name")
+						c.Context().Auth(&socket.AuthUser{
+							Id:   uint(uid),
+							Name: uname,
+						})
+						var key []byte
+						if s.crypto != nil {
+							key = s.crypto.Type().RandKey()
+						}
+						c.Context().SetOptional("cryptKey", key)
+						response.CryptKey = key
+					}
 				}
 			}
 
