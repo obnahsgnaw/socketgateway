@@ -34,6 +34,8 @@ type ConnId struct {
 
 type AuthUser struct {
 	Id   uint
+	Cid  uint
+	Oid  uint
 	Name string
 }
 

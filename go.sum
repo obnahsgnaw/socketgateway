@@ -68,8 +68,8 @@ github.com/obnahsgnaw/http v0.1.5 h1:1Sy3sS34K8WSILhClFy4mWXZ9jdv0jGBanTsyEr418w
 github.com/obnahsgnaw/http v0.1.5/go.mod h1:9NWyrZbIhWAxZL34/mUSTMHsTgkp8yTE40WsFeAEwF4=
 github.com/obnahsgnaw/rpc v0.5.13 h1:ndznJUr5tyEbaSN9FvP/SPPfJRASb8osWsSWG2g9vr8=
 github.com/obnahsgnaw/rpc v0.5.13/go.mod h1:UqktjU9yU32RMoiBhMndmYlmfKeCfNWbrhTjfmGnyEk=
-github.com/obnahsgnaw/socketapi v0.5.2 h1:7W/5rZx0s0ZTjI7cakUP59FQcMaL8KyIRJMNH3UAcaU=
-github.com/obnahsgnaw/socketapi v0.5.2/go.mod h1:4nnuHzzHpuO6fPOSl9qY1fnrD/UWubc3kp7ReEIpNtM=
+github.com/obnahsgnaw/socketapi v0.5.3 h1:/zmauK9ji2W9VYFA+y7hjmXodxaJ1ZtlEvEG7OdVpxo=
+github.com/obnahsgnaw/socketapi v0.5.3/go.mod h1:4nnuHzzHpuO6fPOSl9qY1fnrD/UWubc3kp7ReEIpNtM=
 github.com/obnahsgnaw/socketutil v0.8.0 h1:W6SjdOZwUHIGEAIG2xLSJRdMAhiXfP/2V/j0HanKY0k=
 github.com/obnahsgnaw/socketutil v0.8.0/go.mod h1:7x0AIdtVavwyrdxTa3peD5mlhtycy4BMJIUdg7NSkUw=
 github.com/panjf2000/ants/v2 v2.7.1 h1:qBy5lfSdbxvrR0yUnZfaEDjf0FlCw4ufsbcsxmE7r+M=
