@@ -27,7 +27,6 @@ import (
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -69,10 +68,14 @@ type Server struct {
 	reuseAddr       bool
 	keepalive       uint
 	tickInterval    time.Duration
-	authAddress     string
+	authProvider    AuthProvider
 	crypto          eventhandler.Cryptor
 	noAuthStaticKey []byte
 	actListeners    []func(*action.Manager)
+}
+
+type AuthProvider interface {
+	GetAuthedUser(token string) (*socket.AuthUser, error)
 }
 
 func st2hdt(sst servertype.ServerType) servertype.ServerType {
@@ -417,7 +420,7 @@ func (s *Server) defaultListen() {
 			}
 			respData = response
 			// 没有地址标识没启用认证 返回默认的密钥
-			if s.authAddress == "" {
+			if s.authProvider == nil {
 				response.Success = true
 				// 有加解密返回默认密钥
 				if s.crypto != nil {
@@ -425,37 +428,19 @@ func (s *Server) defaultListen() {
 				}
 			} else {
 				// 有认证
-				rq, err := http.NewRequest("GET", s.authAddress, nil)
-				if err != nil {
-					response.Success = false
-					s.Logger().Error(s.msg("auth action forward error: err=" + err.Error()))
-					return
-				}
-				rq.Header.Set("Authorization", "socket "+q.Token)
-				client := &http.Client{}
-				resp, err := client.Do(rq)
+				u, err := s.authProvider.GetAuthedUser(q.Token)
 				if err != nil {
 					s.Logger().Error(s.msg("auth action request resp error: err=" + err.Error()))
 					response.Success = false
 				} else {
-					if resp.StatusCode != http.StatusOK {
-						response.Success = false
-					} else {
-						response.Success = true
-						uidStr := resp.Header.Get("X-Authed-User-Id")
-						uid, _ := strconv.Atoi(uidStr)
-						uname := resp.Header.Get("X-Authed-User-Name")
-						c.Context().Auth(&socket.AuthUser{
-							Id:   uint(uid),
-							Name: uname,
-						})
-						var key []byte
-						if s.crypto != nil {
-							key = s.crypto.Type().RandKey()
-						}
-						c.Context().SetOptional("cryptKey", key)
-						response.CryptKey = key
+					response.Success = true
+					c.Context().Auth(u)
+					var key []byte
+					if s.crypto != nil {
+						key = s.crypto.Type().RandKey()
 					}
+					c.Context().SetOptional("cryptKey", key)
+					response.CryptKey = key
 				}
 			}
 

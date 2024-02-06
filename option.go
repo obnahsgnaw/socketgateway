@@ -42,9 +42,9 @@ func Heartbeat(interval time.Duration) Option {
 	}
 }
 
-func Auth(address string) Option {
+func Auth(p AuthProvider) Option {
 	return func(s *Server) {
-		s.authAddress = address
+		s.authProvider = p
 		s.addEventOption(eventhandler.Auth())
 	}
 }
