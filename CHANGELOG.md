@@ -1,4 +1,20 @@
 
+<a name="v0.23.17"></a>
+## [v0.23.17](https://8.140.161.172/wangsb/wgateway/compare/v0.23.16...v0.23.17) (2024-02-06)
+
+### Bug Fixes
+
+* **socket:** added cid oid on authUser
+
+
+<a name="v0.23.16"></a>
+## [v0.23.16](https://8.140.161.172/wangsb/wgateway/compare/v0.23.15...v0.23.16) (2024-02-06)
+
+### Bug Fixes
+
+* **auth:** fix auth provide
+
+
 <a name="v0.23.15"></a>
 ## [v0.23.15](https://8.140.161.172/wangsb/wgateway/compare/v0.23.14...v0.23.15) (2024-02-05)
 
