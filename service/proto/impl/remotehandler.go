@@ -50,6 +50,8 @@ func (h *RemoteHandler) Call(serverHost, gateway, format string, c socket.Conn, 
 		req.User = &handlerv1.HandleRequest_User{
 			Id:   int64(u.Id),
 			Name: u.Name,
+			Cid:  int64(u.Cid),
+			Oid:  int64(u.Oid),
 		}
 	}
 	resp, err := handler.Handle(context.Background(), req)

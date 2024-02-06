@@ -49,7 +49,7 @@ func main() {
 		Cors:      nil,
 		LogCnf:    nil,
 	})
-	s.With(socketgateway.Doc(e, "/v1/doc/socket/tcp", true))
+	s.With(socketgateway.Doc(e, true))
 	s.With(socketgateway.Watcher(func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field) {
 		s.Logger().Debug(strconv.Itoa(c.Fd()) + ": " + msg)
 	}))
