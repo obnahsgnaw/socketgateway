@@ -34,9 +34,15 @@ type ConnId struct {
 
 type AuthUser struct {
 	Id   uint
-	Cid  uint
-	Oid  uint
 	Name string
+	Attr map[string]string
+}
+
+func (s *AuthUser) GetAttr(key, defVal string) string {
+	if v, ok := s.Attr[key]; ok {
+		return v
+	}
+	return defVal
 }
 
 func (b ConnId) String() string {
