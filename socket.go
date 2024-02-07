@@ -434,6 +434,9 @@ func (s *Server) defaultListen() {
 					response.Success = false
 				} else {
 					response.Success = true
+					if u.Attr == nil {
+						u.Attr = make(map[string]string)
+					}
 					c.Context().Auth(u)
 					var key []byte
 					if s.crypto != nil {
