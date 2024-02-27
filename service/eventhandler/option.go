@@ -1,6 +1,7 @@
 package eventhandler
 
 import (
+	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"time"
@@ -28,6 +29,16 @@ func Auth() Option {
 	return func(event *Event) {
 		event.authEnable = true
 		event.AddTicker("auth-ticker", authTicker(time.Second*10))
+	}
+}
+
+func DefaultUser(u *socket.AuthUser) Option {
+	return func(event *Event) {
+		event.authEnable = false
+		if u.Attr == nil {
+			u.Attr = make(map[string]string)
+		}
+		event.defaultUser = u
 	}
 }
 

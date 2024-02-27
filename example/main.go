@@ -54,6 +54,11 @@ func main() {
 		s.Logger().Debug(strconv.Itoa(c.Fd()) + ": " + msg)
 	}))
 	s.With(socketgateway.ReuseAddr())
+	s.With(socketgateway.DefaultUser(&socket.AuthUser{
+		Id:   0,
+		Name: "system",
+		Attr: nil,
+	}))
 	app.AddServer(s)
 	app.Run(func(err error) {
 		panic(err)
