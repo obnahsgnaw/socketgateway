@@ -34,6 +34,7 @@ type Event struct {
 	tickInterval  time.Duration
 	crypto        Cryptor
 	staticEsKey   []byte // 认证之前采用固定密钥，认证之后采用认证后的密钥
+	defaultUser   *socket.AuthUser
 }
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
@@ -85,10 +86,17 @@ func (e *Event) OnBoot(s *socket.Server) {
 	}
 }
 
-func (e *Event) OnOpen(_ *socket.Server, c socket.Conn) {
+func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
 	e.log(c, "Connected", zapcore.InfoLevel)
 	if e.crypto != nil {
 		c.Context().SetOptional("cryptKey", e.staticEsKey)
+	}
+	if !e.authEnable {
+		c.Context().Auth(e.defaultUser)
+		s.BindId(c, socket.ConnId{
+			Id:   strconv.Itoa(c.Fd()),
+			Type: "UID",
+		})
 	}
 }
 

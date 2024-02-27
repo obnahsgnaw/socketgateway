@@ -438,6 +438,10 @@ func (s *Server) defaultListen() {
 						u.Attr = make(map[string]string)
 					}
 					c.Context().Auth(u)
+					s.ss.BindId(c, socket.ConnId{
+						Id:   strconv.Itoa(int(u.Id)),
+						Type: "UID",
+					})
 					var key []byte
 					if s.crypto != nil {
 						key = s.crypto.Type().RandKey()

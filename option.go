@@ -49,6 +49,12 @@ func Auth(p AuthProvider) Option {
 	}
 }
 
+func DefaultUser(u *socket.AuthUser) Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.DefaultUser(u))
+	}
+}
+
 func Tick(interval time.Duration) Option {
 	return func(s *Server) {
 		s.tickInterval = interval
