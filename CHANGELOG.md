@@ -1,4 +1,12 @@
 
+<a name="v0.23.19"></a>
+## [v0.23.19](https://8.140.161.172/wangsb/wgateway/compare/v0.23.18...v0.23.19) (2024-02-27)
+
+### Features
+
+* **event:** added default user and UID bind
+
+
 <a name="v0.23.18"></a>
 ## [v0.23.18](https://8.140.161.172/wangsb/wgateway/compare/v0.23.17...v0.23.18) (2024-02-07)
 
