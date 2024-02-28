@@ -1,4 +1,12 @@
 
+<a name="v0.23.21"></a>
+## [v0.23.21](https://8.140.161.172/wangsb/wgateway/compare/v0.23.20...v0.23.21) (2024-02-29)
+
+### Bug Fixes
+
+* **wss:** fix gnet ws split message
+
+
 <a name="v0.23.20"></a>
 ## [v0.23.20](https://8.140.161.172/wangsb/wgateway/compare/v0.23.19...v0.23.20) (2024-02-27)
 
