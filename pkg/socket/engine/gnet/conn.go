@@ -1,6 +1,7 @@
 package gnet
 
 import (
+	"errors"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/panjf2000/gnet/v2"
@@ -13,6 +14,8 @@ type Conn struct {
 	fd          int
 	connContext *socket.ConnContext
 	raw         gnet.Conn
+	pkg         [][]byte
+	err         error
 }
 
 func newConn(c gnet.Conn, ctx *socket.ConnContext) *Conn {
@@ -33,17 +36,27 @@ func (c *Conn) Context() *socket.ConnContext {
 
 func (c *Conn) Read() ([]byte, error) {
 	if c.connContext.Upgraded() {
-		b, _, e := wsutil.ReadClientData(c.raw)
-		return b, e
+		if c.err != nil {
+			return nil, c.err
+		}
+		if len(c.pkg) == 0 {
+			return nil, errors.New("conn error: no data to read")
+		}
+		b := c.pkg[0]
+		c.pkg = c.pkg[1:]
+		return b, nil
 	}
 
-	buf, err := c.raw.Peek(c.raw.InboundBuffered())
-	if err == nil {
-		if _, err = c.raw.Discard(len(buf)); err != nil {
-			return nil, err
-		}
+	size := c.raw.InboundBuffered()
+	buf := make([]byte, size)
+	read, err := c.raw.Read(buf)
+	if err != nil {
+		return nil, err
 	}
-	return buf, err
+	if read < size {
+		return nil, errors.New("read bytes len err")
+	}
+	return buf, nil
 }
 
 func (c *Conn) Write(b []byte) error {

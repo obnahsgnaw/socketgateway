@@ -26,7 +26,7 @@ func main() {
 			return true
 		}),
 		application.Logger(&logger.Config{
-			Dir:        "/Users/wangshanbo/Documents/Data/projects/socketgateway/out",
+			Dir:        "",
 			MaxSize:    5,
 			MaxBackup:  1,
 			MaxAge:     1,
@@ -37,7 +37,7 @@ func main() {
 	)
 	defer app.Release()
 
-	s := socketgateway.New(app, sockettype.TCP, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
+	s := socketgateway.New(app, sockettype.WSS, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
 	s.With(socketgateway.Engine(gnet.New()))
 	l, _ := rpc2.NewListener(url.Host{Ip: "127.0.0.1", Port: 8002})
 	rps := rpc2.New(app, l, "gw", "gw", endtype.Frontend)
