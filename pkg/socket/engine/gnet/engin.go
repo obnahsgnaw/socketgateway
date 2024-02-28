@@ -2,7 +2,7 @@ package gnet
 
 import (
 	"context"
-	"github.com/gobwas/ws"
+	"errors"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/panjf2000/gnet/v2"
@@ -39,6 +39,9 @@ func (e *Engine) OnShutdown(gnet.Engine) {
 
 func (e *Engine) OnOpen(c gnet.Conn) (out []byte, action gnet.Action) {
 	connCtx := socket.NewContext()
+	if e.ws {
+		connCtx.SetOptional("wsCodec", new(wsCodec))
+	}
 	c.SetContext(connCtx)
 	c1 := newConn(c, connCtx)
 	e.connections.Store(c.Fd(), c1)
@@ -64,11 +67,39 @@ func (e *Engine) OnTraffic(c gnet.Conn) (action gnet.Action) {
 		c2 = c1.(*Conn)
 	}
 	c2.Context().Active()
-	if e.ws && !c2.Context().Upgraded() {
-		if _, err := ws.Upgrade(c); err != nil {
-			return gnet.Close
+	if e.ws {
+		wcc, _ := c2.connContext.GetOptional("wsCodec")
+		wc := wcc.(*wsCodec)
+
+		if err := wc.readBufferBytes(c2.raw); err != nil {
+			c2.err = err
+			e.event.OnTraffic(e.server, c2)
+			return
 		}
-		c2.Context().Upgrade()
+		if !c2.Context().Upgraded() {
+			if err := wc.upgrade(c); err != nil {
+				return gnet.Close
+			}
+			c2.Context().Upgrade()
+		}
+		if wc.buf.Len() <= 0 {
+			return gnet.None
+		}
+		messages, err := wc.Decode(c2.raw)
+		if err != nil {
+			c2.err = err
+			e.event.OnTraffic(e.server, c2)
+			return
+		}
+		if messages == nil {
+			c2.err = errors.New("read message empty")
+			e.event.OnTraffic(e.server, c2)
+			return
+		}
+		for _, msg := range messages {
+			c2.pkg = append(c2.pkg, msg.Payload)
+			e.event.OnTraffic(e.server, c2)
+		}
 	} else {
 		e.event.OnTraffic(e.server, c2)
 	}
