@@ -27,7 +27,6 @@ import (
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -105,13 +104,8 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 	if s.st == "" {
 		s.addErr(errors.New(s.msg("type not support")))
 	}
-	s.logCnf = logger.CopyCnfWithLevel(s.app.LogConfig())
-	if s.logCnf != nil {
-		s.logCnf.AddSubDir(filepath.Join(s.et.String(), utils.ToStr(s.st.String(), "-", s.id)))
-		s.logCnf.SetFilename(utils.ToStr(s.st.String(), "-", s.id))
-		s.logCnf.ReplaceTraceLevel(zap.NewAtomicLevelAt(zap.FatalLevel))
-	}
-	s.logger, err = logger.New(utils.ToStr(s.st.String(), "-gateway"), s.logCnf, app.Debugger().Debug())
+	s.logCnf = s.app.LogConfig()
+	s.logger = s.app.Logger().Named(utils.ToStr(s.st.String(), "-", s.id))
 	s.addErr(err)
 	s.regInfo = &regCenter.RegInfo{
 		AppId:   s.app.ID(),
@@ -172,9 +166,7 @@ func (s *Server) EndType() endtype.EndType {
 
 func (s *Server) Release() {
 	var cb = func(msg string) {
-		if s.logger != nil {
-			s.logger.Debug(msg)
-		}
+		s.logger.Debug(msg)
 	}
 	if s.RegEnabled() && s.app.Register() != nil {
 		_ = s.app.DoUnregister(s.regInfo, cb)
@@ -185,10 +177,8 @@ func (s *Server) Release() {
 	if s.rs != nil {
 		s.rs.Release()
 	}
-	if s.logger != nil {
-		s.logger.Info("released")
-		_ = s.logger.Sync()
-	}
+	s.logger.Info("released")
+	_ = s.logger.Sync()
 }
 
 func (s *Server) Run(failedCb func(error)) {
