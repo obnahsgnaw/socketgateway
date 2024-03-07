@@ -8,7 +8,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/obnahsgnaw/application v0.16.8
 	github.com/obnahsgnaw/http v0.1.8
-	github.com/obnahsgnaw/rpc v0.5.16
+	github.com/obnahsgnaw/rpc v0.5.17
 	github.com/obnahsgnaw/socketapi v0.5.4
 	github.com/obnahsgnaw/socketutil v0.8.0
 	github.com/panjf2000/gnet/v2 v2.2.9

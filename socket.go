@@ -105,7 +105,7 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 		s.addErr(errors.New(s.msg("type not support")))
 	}
 	s.logCnf = s.app.LogConfig()
-	s.logger = s.app.Logger().Named(utils.ToStr(s.st.String(), "-", s.id))
+	s.logger = s.app.Logger().Named(utils.ToStr(s.st.String(), "-", s.et.String(), "-", "gateway"))
 	s.addErr(err)
 	s.regInfo = &regCenter.RegInfo{
 		AppId:   s.app.ID(),
