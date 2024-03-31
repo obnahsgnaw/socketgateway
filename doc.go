@@ -62,7 +62,10 @@ func newDocServerWithEngine(e *http2.Http, clusterId string, config *DocConfig) 
 		prefix:  utils.ToStr("/", config.endType.String(), "-", config.servType.String(), "-docs"), // the same prefix with the socket handler
 		origin: url.Origin{
 			Protocol: url.HTTP,
-			Host:     e.Host(),
+			Host: url.Host{
+				Ip:   e.Ip(),
+				Port: e.Port(),
+			},
 		},
 	}
 	config.Doc.path = s.prefix + "/gateway/gateway"
@@ -79,7 +82,7 @@ func newDocServerWithEngine(e *http2.Http, clusterId string, config *DocConfig) 
 			Type:    config.Doc.socketType.String(),
 			EndType: config.endType.String(),
 		},
-		Host: s.engine.Host().String(),
+		Host: s.engine.Host(),
 		Val:  "",
 		Ttl:  config.RegTtl,
 		Values: map[string]string{
