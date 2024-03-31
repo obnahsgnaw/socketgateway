@@ -64,7 +64,7 @@ func Tick(interval time.Duration) Option {
 
 func Crypto(crypto eventhandler.Cryptor, noAuthKey []byte) Option {
 	return func(s *Server) {
-		s.crypto = crypto
+		s.cryptor = crypto
 		s.noAuthStaticKey = noAuthKey
 		s.addEventOption(eventhandler.Crypto(crypto, noAuthKey))
 	}
@@ -84,16 +84,16 @@ func CodedProvider(p codec.DataBuilderProvider) Option {
 
 func Rpc(ins *rpc2.Server, runable bool) Option {
 	return func(s *Server) {
-		s.rs = ins
+		s.rpcServer = ins
 		s.rpsIgRun = !runable
-		s.rs.AddRegInfo(s.sct.String()+"-gateway", utils.ToStr(s.sct.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, s.st))
+		s.rpcServer.AddRegInfo(s.socketType.String()+"-gateway", utils.ToStr(s.socketType.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, s.serverType))
 	}
 }
 
 func Doc(e *http.Http, runable bool) Option {
 	return func(s *Server) {
 		s.dsIgRun = !runable
-		s.ds = newDocServerWithEngine(e, s.app.ID(), s.docConfig())
+		s.docServer = newDocServerWithEngine(e, s.app.Cluster().Id(), s.docConfig())
 	}
 }
 
@@ -111,6 +111,6 @@ func Ticker(name string, ticker eventhandler.TickHandler) Option {
 
 func Engine(e socket.Engine) Option {
 	return func(s *Server) {
-		s.se = e
+		s.engine = e
 	}
 }

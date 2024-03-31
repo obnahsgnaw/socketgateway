@@ -40,27 +40,28 @@ const closeAction = 0
 // api    port === optional, for doc view page
 
 type Server struct {
+	app             *application.Application
 	id              string // 模块-子模块
 	name            string
-	st              servertype.ServerType
-	sct             sockettype.SocketType
-	et              endtype.EndType
+	endType         endtype.EndType
+	serverType      servertype.ServerType
+	socketType      sockettype.SocketType
 	host            url.Host
-	dc              *DocConfig
-	app             *application.Application
-	m               *action.Manager
-	ss              *socket.Server
-	e               *eventhandler.Event
+	server          *socket.Server
+	engine          socket.Engine
+	rpcServer       *rpc2.Server
+	actManager      *action.Manager
+	actListeners    []func(*action.Manager)
+	eventHandler    *eventhandler.Event
+	docServer       *DocServer
+	cryptor         eventhandler.Cryptor
 	eo              []eventhandler.Option
-	se              socket.Engine
-	regInfo         *regCenter.RegInfo
-	rs              *rpc2.Server
-	rpsIgRun        bool
-	ds              *DocServer
-	dsIgRun         bool
 	logger          *zap.Logger
 	logCnf          *logger.Config
+	regInfo         *regCenter.RegInfo
 	handlerRegInfo  *regCenter.RegInfo
+	rpsIgRun        bool
+	dsIgRun         bool
 	errs            []error
 	poll            bool
 	regEnable       bool
@@ -68,9 +69,7 @@ type Server struct {
 	keepalive       uint
 	tickInterval    time.Duration
 	authProvider    AuthProvider
-	crypto          eventhandler.Cryptor
 	noAuthStaticKey []byte
-	actListeners    []func(*action.Manager)
 }
 
 type AuthProvider interface {
@@ -92,42 +91,42 @@ func st2hdt(sst servertype.ServerType) servertype.ServerType {
 func New(app *application.Application, st sockettype.SocketType, et endtype.EndType, host url.Host, options ...Option) *Server {
 	var err error
 	s := &Server{
-		id:   "gateway-gateway",
-		name: "gateway",
-		st:   st.ToServerType(),
-		sct:  st,
-		et:   et,
-		host: host,
-		app:  app,
-		m:    action.NewManager(),
+		id:         "gateway-gateway",
+		name:       "gateway",
+		serverType: st.ToServerType(),
+		socketType: st,
+		endType:    et,
+		host:       host,
+		app:        app,
+		actManager: action.NewManager(),
 	}
-	if s.st == "" {
+	if s.serverType == "" {
 		s.addErr(errors.New(s.msg("type not support")))
 	}
 	s.logCnf = s.app.LogConfig()
-	s.logger = s.app.Logger().Named(utils.ToStr(s.st.String(), "-", s.et.String(), "-", "gateway"))
+	s.logger = s.app.Logger().Named(utils.ToStr(s.serverType.String(), "-", s.endType.String(), "-", "gateway"))
 	s.addErr(err)
 	s.regInfo = &regCenter.RegInfo{
-		AppId:   s.app.ID(),
-		RegType: regtype.RegType(s.st),
+		AppId:   s.app.Cluster().Id(),
+		RegType: regtype.RegType(s.serverType),
 		ServerInfo: regCenter.ServerInfo{
 			Id:      s.id,
 			Name:    s.name,
-			Type:    s.st.String(),
-			EndType: s.et.String(),
+			Type:    s.serverType.String(),
+			EndType: s.endType.String(),
 		},
 		Host: s.host.String(),
 		Val:  s.host.String(),
 		Ttl:  s.app.RegTtl(),
 	}
 	s.handlerRegInfo = &regCenter.RegInfo{
-		AppId:   s.app.ID(),
+		AppId:   s.app.Cluster().Id(),
 		RegType: regtype.Rpc,
 		ServerInfo: regCenter.ServerInfo{
 			Id:      s.id,
 			Name:    s.name,
-			Type:    st2hdt(s.st).String(),
-			EndType: s.et.String(),
+			Type:    st2hdt(s.serverType).String(),
+			EndType: s.endType.String(),
 		},
 		Host:      "",
 		Val:       "",
@@ -156,12 +155,12 @@ func (s *Server) Name() string {
 
 // Type return the server end type
 func (s *Server) Type() servertype.ServerType {
-	return s.st
+	return s.serverType
 }
 
 // EndType return the server end type
 func (s *Server) EndType() endtype.EndType {
-	return s.et
+	return s.endType
 }
 
 func (s *Server) Release() {
@@ -171,11 +170,11 @@ func (s *Server) Release() {
 	if s.RegEnabled() && s.app.Register() != nil {
 		_ = s.app.DoUnregister(s.regInfo, cb)
 	}
-	if s.ds != nil && s.app.Register() != nil {
-		_ = s.app.DoUnregister(s.ds.regInfo, cb)
+	if s.docServer != nil && s.app.Register() != nil {
+		_ = s.app.DoUnregister(s.docServer.regInfo, cb)
 	}
-	if s.rs != nil {
-		s.rs.Release()
+	if s.rpcServer != nil {
+		s.rpcServer.Release()
 	}
 	s.logger.Info("released")
 	_ = s.logger.Sync()
@@ -187,15 +186,15 @@ func (s *Server) Run(failedCb func(error)) {
 		return
 	}
 	s.logger.Info("init start...")
-	if s.se == nil {
-		s.se = net.New()
+	if s.engine == nil {
+		s.engine = net.New()
 		s.logger.Info("socket engine initialize(default)")
 	} else {
 		s.logger.Info("socket engine initialize(customer)")
 	}
 	s.addEventOption(eventhandler.Logger(s.logger))
-	s.e = eventhandler.New(s.app.Context(), s.m, s.sct, s.eo...)
-	s.ss = socket.New(s.app.Context(), s.sct, s.host.Port, s.se, s.e, &socket.Config{
+	s.eventHandler = eventhandler.New(s.app.Context(), s.actManager, s.socketType, s.eo...)
+	s.server = socket.New(s.app.Context(), s.socketType, s.host.Port, s.engine, s.eventHandler, &socket.Config{
 		MultiCore: true,
 		Keepalive: s.keepalive,
 		NoDelay:   true,
@@ -205,7 +204,7 @@ func (s *Server) Run(failedCb func(error)) {
 	s.logger.Info("socket server initialized")
 	s.defaultListen()
 	for _, h := range s.actListeners {
-		h(s.m)
+		h(s.actManager)
 	}
 	s.logger.Info("listen action initialized")
 	regLogCb := func(msg string) {
@@ -223,23 +222,23 @@ func (s *Server) Run(failedCb func(error)) {
 			failedCb(s.socketGwError(s.msg("watch failed"), err))
 		}
 	}
-	if s.ds != nil {
+	if s.docServer != nil {
 		s.logger.Info("doc server enabled, init start...")
-		s.logger.Info(utils.ToStr("doc index url=", s.ds.IndexDocUrl(), ", doc url=", s.ds.DocUrl()))
+		s.logger.Info(utils.ToStr("doc index url=", s.docServer.IndexDocUrl(), ", doc url=", s.docServer.DocUrl()))
 		if !s.dsIgRun {
-			docDesc := utils.ToStr("doc server[", s.ds.engine.Host().String(), "] ")
+			docDesc := utils.ToStr("doc server[", s.docServer.engine.Host(), "] ")
 			s.logger.Info(docDesc + "start and serving...")
-			s.ds.SyncStart(failedCb)
+			s.docServer.SyncStart(failedCb)
 		}
 		if s.app.Register() != nil {
 			s.logger.Debug("doc register start")
-			if err := s.app.DoRegister(s.ds.regInfo, regLogCb); err != nil {
+			if err := s.app.DoRegister(s.docServer.regInfo, regLogCb); err != nil {
 				failedCb(s.socketGwError(s.msg("register doc failed"), err))
 			}
 			s.logger.Debug("doc registered")
 		}
 		s.logger.Debug("sub doc watch start...")
-		prefix := s.ds.regInfo.Prefix()
+		prefix := s.docServer.regInfo.Prefix()
 		if prefix == "" {
 			failedCb(errors.New("watch key prefix is empty"))
 			return
@@ -254,22 +253,22 @@ func (s *Server) Run(failedCb func(error)) {
 			if isDel {
 				if attr == "url" {
 					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] leaved"))
-					s.ds.Manager.Remove(moduleName, keyName, val)
+					s.docServer.Manager.Remove(moduleName, keyName, val)
 				}
 			} else {
 				if attr == "url" {
 					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
-					s.ds.Manager.Add(moduleName, keyName, "", val, nil)
+					s.docServer.Manager.Add(moduleName, keyName, "", val, nil)
 				}
 				if attr == "title" {
-					s.ds.Manager.Add(moduleName, keyName, val, "", nil)
+					s.docServer.Manager.Add(moduleName, keyName, val, "", nil)
 				}
 				if attr == "public" {
 					var public bool
 					if val == "1" {
 						public = true
 					}
-					s.ds.Manager.Add(moduleName, keyName, "", "", &public)
+					s.docServer.Manager.Add(moduleName, keyName, "", "", &public)
 				}
 			}
 		})
@@ -278,15 +277,15 @@ func (s *Server) Run(failedCb func(error)) {
 			return
 		}
 	}
-	if s.rs != nil {
+	if s.rpcServer != nil {
 		s.logger.Info("rpc server enabled, init start...")
 		s.initRpc()
 		if !s.rpsIgRun {
-			s.rs.Run(failedCb)
+			s.rpcServer.Run(failedCb)
 		}
 	}
 	s.logger.Info(utils.ToStr("socket[", s.host.String(), "] start and serving..."))
-	s.ss.SyncStart(failedCb)
+	s.server.SyncStart(failedCb)
 }
 
 func (s *Server) Listen(act codec.Action, structure action.DataStructure, handler action.Handler) {
@@ -297,7 +296,7 @@ func (s *Server) Listen(act codec.Action, structure action.DataStructure, handle
 }
 
 func (s *Server) Send(c socket.Conn, id codec.Action, data codec.DataPtr) (err error) {
-	return s.e.SendAction(c, id, data)
+	return s.eventHandler.SendAction(c, id, data)
 }
 
 // RegEnabled reg http
@@ -320,53 +319,53 @@ func (s *Server) LogConfig() *logger.Config {
 }
 
 func (s *Server) Engine() *socket.Server {
-	return s.ss
+	return s.server
 }
 
 func (s *Server) Rpc() *rpc2.Server {
-	return s.rs
+	return s.rpcServer
 }
 
 func (s *Server) DocServer() *DocServer {
-	return s.ds
+	return s.docServer
 }
 
 func (s *Server) initRpc() {
-	if s.rs != nil {
-		s.rs.RegisterService(rpc2.ServiceInfo{
+	if s.rpcServer != nil {
+		s.rpcServer.RegisterService(rpc2.ServiceInfo{
 			Desc: bindv1.BindService_ServiceDesc,
-			Impl: impl.NewBindService(func() *socket.Server { return s.ss }),
+			Impl: impl.NewBindService(func() *socket.Server { return s.server }),
 		})
-		s.rs.RegisterService(rpc2.ServiceInfo{
+		s.rpcServer.RegisterService(rpc2.ServiceInfo{
 			Desc: connv1.ConnService_ServiceDesc,
-			Impl: impl.NewConnService(func() *socket.Server { return s.ss }),
+			Impl: impl.NewConnService(func() *socket.Server { return s.server }),
 		})
-		s.rs.RegisterService(rpc2.ServiceInfo{
+		s.rpcServer.RegisterService(rpc2.ServiceInfo{
 			Desc: groupv1.GroupService_ServiceDesc,
-			Impl: impl.NewGroupService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
+			Impl: impl.NewGroupService(func() *socket.Server { return s.server }, func() *eventhandler.Event { return s.eventHandler }),
 		})
-		s.rs.RegisterService(rpc2.ServiceInfo{
+		s.rpcServer.RegisterService(rpc2.ServiceInfo{
 			Desc: messagev1.MessageService_ServiceDesc,
-			Impl: impl.NewMessageService(func() *socket.Server { return s.ss }, func() *eventhandler.Event { return s.e }),
+			Impl: impl.NewMessageService(func() *socket.Server { return s.server }, func() *eventhandler.Event { return s.eventHandler }),
 		})
-		s.rs.RegisterService(rpc2.ServiceInfo{
+		s.rpcServer.RegisterService(rpc2.ServiceInfo{
 			Desc: slbv1.SlbService_ServiceDesc,
-			Impl: impl.NewSlbService(func() *socket.Server { return s.ss }),
+			Impl: impl.NewSlbService(func() *socket.Server { return s.server }),
 		})
-		s.m.With(action.CloseAction(closeAction))
-		s.m.With(action.Gateway(s.rs.Host()))
-		s.m.With(action.RtHandler(impl.NewRemoteHandler(s.logger, impl.St2hct(s.sct))))
+		s.actManager.With(action.CloseAction(closeAction))
+		s.actManager.With(action.Gateway(s.rpcServer.Host()))
+		s.actManager.With(action.RtHandler(impl.NewRemoteHandler(s.logger, impl.St2hct(s.socketType))))
 	}
 }
 
 func (s *Server) docConfig() *DocConfig {
 	return &DocConfig{
 		id:       s.id,
-		endType:  s.et,
-		servType: s.st,
+		endType:  s.endType,
+		servType: s.serverType,
 		RegTtl:   s.app.RegTtl(),
 		Doc: DocItem{
-			socketType: s.sct,
+			socketType: s.socketType,
 			Title:      s.name,
 			Public:     true,
 			Provider: func() ([]byte, error) {
@@ -413,7 +412,7 @@ func (s *Server) defaultListen() {
 			if s.authProvider == nil {
 				response.Success = true
 				// 有加解密返回默认密钥
-				if s.crypto != nil {
+				if s.cryptor != nil {
 					response.CryptKey = s.noAuthStaticKey
 				}
 			} else {
@@ -428,13 +427,13 @@ func (s *Server) defaultListen() {
 						u.Attr = make(map[string]string)
 					}
 					c.Context().Auth(u)
-					s.ss.BindId(c, socket.ConnId{
+					s.server.BindId(c, socket.ConnId{
 						Id:   strconv.Itoa(int(u.Id)),
 						Type: "UID",
 					})
 					var key []byte
-					if s.crypto != nil {
-						key = s.crypto.Type().RandKey()
+					if s.cryptor != nil {
+						key = s.cryptor.Type().RandKey()
 					}
 					c.Context().SetOptional("cryptKey", key)
 					response.CryptKey = key
@@ -467,7 +466,7 @@ func (s *Server) watch(register regCenter.Register) error {
 		keyName := idSegments[1]
 		if isDel {
 			s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " leaved"))
-			s.m.UnregisterRemoteAction(host)
+			s.actManager.UnregisterRemoteAction(host)
 		} else {
 			s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " added"))
 			flbNum := ""
@@ -476,7 +475,7 @@ func (s *Server) watch(register regCenter.Register) error {
 				val = valNum[0]
 				flbNum = valNum[1]
 			}
-			s.m.RegisterRemoteAction(codec.Action{
+			s.actManager.RegisterRemoteAction(codec.Action{
 				Id:   codec.ActionId(actionId),
 				Name: val,
 			}, host, flbNum)
