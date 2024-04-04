@@ -192,11 +192,8 @@ func (s *DocServer) initKeyRoute() {
 	s.engine.Engine().GET(s.prefix+"/:md/:key", hd) // key 路由
 }
 
-func (s *DocServer) Start() error {
-	if err := s.engine.RunAndServ(); err != nil {
-		return err
-	}
-	return nil
+func (s *DocServer) Start(key string, cb func(error)) {
+	s.engine.RunAndServWithKey(key, cb)
 }
 
 func (s *DocServer) DocUrl() string {
@@ -207,11 +204,10 @@ func (s *DocServer) IndexDocUrl() string {
 	return s.origin.String() + s.prefix + "/:md"
 }
 
-func (s *DocServer) SyncStart(cb func(error)) {
+func (s *DocServer) SyncStart(key string, cb func(error)) {
 	go func() {
-		if err := s.Start(); err != nil {
-			cb(err)
-		}
+		defer s.engine.CloseWithKey(key)
+		s.Start(key, cb)
 	}()
 }
 

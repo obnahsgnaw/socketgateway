@@ -38,13 +38,13 @@ func main() {
 	s.With(socketgateway.Engine(gnet.New()))
 	l, _ := rpc2.NewListener(url.Host{Ip: "127.0.0.1", Port: 8002})
 	rps := rpc2.New(app, l, "gw", "gw", endtype.Frontend, nil)
-	s.With(socketgateway.Rpc(rps, true))
+	s.With(socketgateway.Rpc(rps))
 	e, _ := http.Default("127.0.0.1", 8003, &engine.Config{
 		Name:      "gw",
 		DebugMode: false,
 		Cors:      nil,
 	})
-	s.With(socketgateway.Doc(e, true))
+	s.With(socketgateway.Doc(e))
 	s.With(socketgateway.Watcher(func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field) {
 		s.Logger().Debug(strconv.Itoa(c.Fd()) + ": " + msg)
 	}))

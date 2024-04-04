@@ -82,17 +82,15 @@ func CodedProvider(p codec.DataBuilderProvider) Option {
 	}
 }
 
-func Rpc(ins *rpc2.Server, runable bool) Option {
+func Rpc(ins *rpc2.Server) Option {
 	return func(s *Server) {
 		s.rpcServer = ins
-		s.rpsIgRun = !runable
 		s.rpcServer.AddRegInfo(s.socketType.String()+"-gateway", utils.ToStr(s.socketType.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, s.serverType))
 	}
 }
 
-func Doc(e *http.Http, runable bool) Option {
+func Doc(e *http.Http) Option {
 	return func(s *Server) {
-		s.dsIgRun = !runable
 		s.docServer = newDocServerWithEngine(e, s.app.Cluster().Id(), s.docConfig())
 	}
 }
