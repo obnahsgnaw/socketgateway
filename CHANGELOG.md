@@ -1,6 +1,10 @@
 
+<a name="v0.24.1"></a>
+## [v0.24.1](https://8.140.161.172/wangsb/wgateway/compare/v0.24.0...v0.24.1) (2024-04-04)
+
+
 <a name="v0.24.0"></a>
-## [v0.24.0](https://8.140.161.172/wangsb/wgateway/compare/v0.23.26...v0.24.0) (2024-03-31)
+## [v0.24.0](https://8.140.161.172/wangsb/wgateway/compare/v0.23.26...v0.24.0) (2024-04-02)
 
 
 <a name="v0.23.26"></a>
