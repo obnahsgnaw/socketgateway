@@ -7,8 +7,8 @@ require (
 	github.com/gobwas/ws v1.2.1
 	github.com/gorilla/websocket v1.5.0
 	github.com/obnahsgnaw/application v0.17.8
-	github.com/obnahsgnaw/http v0.2.7
-	github.com/obnahsgnaw/rpc v0.6.7
+	github.com/obnahsgnaw/http v0.2.8
+	github.com/obnahsgnaw/rpc v0.6.8
 	github.com/obnahsgnaw/socketapi v0.5.4
 	github.com/obnahsgnaw/socketutil v0.8.0
 	github.com/panjf2000/gnet/v2 v2.2.9
