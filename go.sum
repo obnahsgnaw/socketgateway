@@ -64,10 +64,10 @@ github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9G
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/obnahsgnaw/application v0.17.8 h1:jUNm10e3UmUDBGP4NdDfod3gcfkqmT3NGarnNPUSL8s=
 github.com/obnahsgnaw/application v0.17.8/go.mod h1:qb1XoqG6RtZPeg7yioOgAYbR209jQR9RwjvbnUgL2RY=
-github.com/obnahsgnaw/http v0.2.7 h1:QZsobk0ZPpo4Jw3wwug7shE3nF8SOKB+Kq+ztc7Bv5c=
-github.com/obnahsgnaw/http v0.2.7/go.mod h1:Q2hcEpUDFA/7vlAsyL8vGTQgZmx30Ihz9HFl6SfQ0Wg=
-github.com/obnahsgnaw/rpc v0.6.7 h1:lx5lCtpQUFYeny/XRgxF9iw6VdU2skDQINuy0+ZF9ps=
-github.com/obnahsgnaw/rpc v0.6.7/go.mod h1:En8ycM/VDxiXXy+VFn4mn9lLnmXyWt+wb+ajxcXVEvI=
+github.com/obnahsgnaw/http v0.2.8 h1:x7LGUJu2kplb0N29CmcyJQEBqF5tVPlaKTS9YxcuG9w=
+github.com/obnahsgnaw/http v0.2.8/go.mod h1:Q2hcEpUDFA/7vlAsyL8vGTQgZmx30Ihz9HFl6SfQ0Wg=
+github.com/obnahsgnaw/rpc v0.6.8 h1:ZImw7gV1KNAd/cu0qQDYC/7cgbbAvSk2dzU44kAvzSI=
+github.com/obnahsgnaw/rpc v0.6.8/go.mod h1:h9dbMOIyw0Et7y7CgHiTMim8UB6PW0+ljSnRroSPNA8=
 github.com/obnahsgnaw/socketapi v0.5.4 h1:EB6nA2oJTELRfqjezB+WFdnSVWzaFe+2Cy0XPXBmHLs=
 github.com/obnahsgnaw/socketapi v0.5.4/go.mod h1:4nnuHzzHpuO6fPOSl9qY1fnrD/UWubc3kp7ReEIpNtM=
 github.com/obnahsgnaw/socketutil v0.8.0 h1:W6SjdOZwUHIGEAIG2xLSJRdMAhiXfP/2V/j0HanKY0k=
