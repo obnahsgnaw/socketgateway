@@ -68,6 +68,7 @@ func (h *wssEngineHandler) handConn(c *WssConn) {
 		}
 		if len(b) > 0 {
 			c.pkg = append(c.pkg, b)
+			c.Context().Active()
 			h.e.event.OnTraffic(h.e.server, c)
 		}
 	}

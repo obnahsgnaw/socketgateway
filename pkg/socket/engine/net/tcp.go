@@ -60,6 +60,7 @@ func (h *tcpEngineHandler) handConn(c *Conn) {
 		}
 		if n > 0 {
 			c.pkg = append(c.pkg, buf[:n])
+			c.Context().Active()
 			h.e.event.OnTraffic(h.e.server, c)
 		}
 	}

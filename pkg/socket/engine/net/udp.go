@@ -54,6 +54,7 @@ func (h *udpEngineHandler) Run() {
 				delete(h.clients, udpAddr.String())
 			})
 			c.pkg = append(c.pkg, data[:n])
+			c.Context().Active()
 			h.e.event.OnTraffic(h.e.server, c)
 		}
 		if h.e.stopped {
