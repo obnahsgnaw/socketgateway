@@ -7,6 +7,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -23,7 +24,16 @@ func NewMessageService(s func() *socket.Server, e func() *eventhandler.Event) *M
 	}
 }
 
-func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessageRequest) (resp *messagev1.SendMessageResponse, err error) {
+func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMessageRequest) (resp *messagev1.SendMessageResponse, err error) {
+	var rqId string
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		ids := md.Get("rq_id")
+		if len(ids) > 0 {
+			rqId = ids[0]
+		}
+	}
+
 	if in.ActionId == 0 {
 		err = status.New(codes.InvalidArgument, "param:ActionId is required").Err()
 		return
@@ -49,7 +59,7 @@ func (gw *MessageService) SendMessage(_ context.Context, in *messagev1.SendMessa
 	} else {
 		msg = in.JsonMessage
 	}
-	if err = gw.e().Send(c, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
+	if err = gw.e().Send(c, rqId, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
 		err = status.New(codes.Internal, "send message failed, err="+err.Error()).Err()
 	}
 

@@ -32,7 +32,7 @@ type DataStructure func() codec.DataPtr
 type Handler func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr)
 
 type RemoteHandler interface {
-	Call(serverHost, gateway, format string, c socket.Conn, id codec.ActionId, data []byte) (respAction codec.Action, respData []byte, err error)
+	Call(rqId, serverHost, gateway, format string, c socket.Conn, id codec.ActionId, data []byte) (respAction codec.Action, respData []byte, err error)
 }
 
 type serverSet map[string][2]string // [server]action-name
@@ -71,7 +71,7 @@ func (m *Manager) HandleClose(c socket.Conn) {
 }
 func (m *Manager) closeTask(c socket.Conn, gw string, wg *sync.WaitGroup) func() {
 	return func() {
-		_, _, _ = m.remoteHandler.Call(gw, m.gateway.String(), "", c, m.closeAction, nil)
+		_, _, _ = m.remoteHandler.Call("", gw, m.gateway.String(), "", c, m.closeAction, nil)
 		wg.Done()
 	}
 }
@@ -210,7 +210,7 @@ func (m *Manager) GetAction(actionId codec.ActionId) (codec.Action, bool) {
 }
 
 // Dispatch the actions
-func (m *Manager) Dispatch(c socket.Conn, name codec.Name, b codec.DataBuilder, actionId codec.ActionId, actionData []byte) (respAction codec.Action, respData []byte, err error) {
+func (m *Manager) Dispatch(c socket.Conn, rqId string, name codec.Name, b codec.DataBuilder, actionId codec.ActionId, actionData []byte) (respAction codec.Action, respData []byte, err error) {
 	if _, s, h, ok := m.getHandler(actionId); ok {
 		p := s()
 		if err = b.Unpack(actionData, p); err != nil {
@@ -238,6 +238,6 @@ func (m *Manager) Dispatch(c socket.Conn, name codec.Name, b codec.DataBuilder, 
 		err = errors.New("action manager error: no set remote action handler")
 		return
 	}
-	respAction, respData, err = m.remoteHandler.Call(s, m.gateway.String(), name.String(), c, actionId, actionData)
+	respAction, respData, err = m.remoteHandler.Call(rqId, s, m.gateway.String(), name.String(), c, actionId, actionData)
 	return
 }

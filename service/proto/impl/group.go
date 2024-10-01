@@ -7,6 +7,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -57,7 +58,15 @@ func (gw *GroupService) LeaveGroup(_ context.Context, in *groupv1.LeaveGroupRequ
 	return
 }
 
-func (gw *GroupService) BroadcastGroup(_ context.Context, in *groupv1.BroadcastGroupRequest) (resp *groupv1.BroadcastGroupResponse, err error) {
+func (gw *GroupService) BroadcastGroup(ctx context.Context, in *groupv1.BroadcastGroupRequest) (resp *groupv1.BroadcastGroupResponse, err error) {
+	var rqId string
+	md, ok := metadata.FromIncomingContext(ctx)
+	if ok {
+		ids := md.Get("rq_id")
+		if len(ids) > 0 {
+			rqId = ids[0]
+		}
+	}
 	if in.GetGroup().Name == "" {
 		err = status.New(codes.InvalidArgument, "param:Group.Name is required").Err()
 		return
@@ -83,7 +92,7 @@ func (gw *GroupService) BroadcastGroup(_ context.Context, in *groupv1.BroadcastG
 				msg = in.JsonMessage
 			}
 
-			_ = gw.e().Send(conn, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg)
+			_ = gw.e().Send(conn, rqId, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg)
 		}
 	})
 
