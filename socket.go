@@ -355,7 +355,7 @@ func (s *Server) initRpc() {
 		})
 		s.actManager.With(action.CloseAction(closeAction))
 		s.actManager.With(action.Gateway(s.rpcServer.Host()))
-		s.actManager.With(action.RtHandler(impl.NewRemoteHandler(s.logger, impl.St2hct(s.socketType))))
+		s.actManager.With(action.RtHandler(impl.NewRemoteHandler(s.app.Context(), s.logger, impl.St2hct(s.socketType))))
 	}
 }
 

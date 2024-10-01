@@ -13,47 +13,50 @@ import (
 )
 
 type RemoteHandler struct {
+	ctx     context.Context
 	tp      handlerv1.SocketType
 	manager *rpcclient.Manager
 }
 
-func NewRemoteHandler(l *zap.Logger, tp handlerv1.SocketType) *RemoteHandler {
+func NewRemoteHandler(ctx context.Context, l *zap.Logger, tp handlerv1.SocketType) *RemoteHandler {
 	m := rpcclient.NewManager()
-	m.RegisterAfterHandler(func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, err error, opts ...grpc.CallOption) {
+	m.RegisterAfterHandler(func(ctx context.Context, head rpcclient.Header, method string, req, reply interface{}, cc *grpc.ClientConn, err error, opts ...grpc.CallOption) {
 		if err != nil {
-			l.Error(utils.ToStr("rpc call socket-handler[", method, "] failed,", err.Error()), zap.Any("req", req), zap.Any("resp", reply))
+			l.Error(utils.ToStr(head.RqId, " ", head.From, " rpc call ", head.To, " socket-handler[", method, "] failed,", err.Error()), zap.Any("rq_id", head.RqId), zap.Any("req", req), zap.Any("resp", reply))
 		} else {
-			l.Debug(utils.ToStr("rpc call socket-handler[", method, "] success"), zap.Any("req", req), zap.Any("resp", reply))
+			l.Debug(utils.ToStr(head.RqId, " ", head.From, " rpc call ", head.To, " socket-handler[", method, "] success"), zap.Any("rq_id", head.RqId), zap.Any("req", req), zap.Any("resp", reply))
 		}
 	})
-	return &RemoteHandler{manager: m, tp: tp}
+	return &RemoteHandler{ctx: ctx, manager: m, tp: tp}
 }
 
-func (h *RemoteHandler) Call(serverHost, gateway, format string, c socket.Conn, id codec.ActionId, data []byte) (codec.Action, []byte, error) {
+func (h *RemoteHandler) Call(rqId, serverHost, gateway, format string, c socket.Conn, id codec.ActionId, data []byte) (codec.Action, []byte, error) {
 	h.manager.Add("handler", serverHost)
-	cc, err := h.manager.GetConn("handler", serverHost, 1)
-	if err != nil {
-		return codec.Action{}, nil, utils.NewWrappedError("handler call rpc conn failed", err)
-	}
-	handler := handlerv1.NewHandlerServiceClient(cc)
-	req := &handlerv1.HandleRequest{
-		ActionId: uint32(id),
-		Package:  data,
-		Gateway:  gateway,
-		Fd:       int64(c.Fd()),
-		BindIds:  c.Context().IdMap(),
-		Format:   format,
-		Typ:      h.tp,
-	}
-	if c.Context().Authed() {
-		u := c.Context().User()
-		req.User = &handlerv1.HandleRequest_User{
-			Id:    int64(u.Id),
-			Name:  u.Name,
-			Attrs: u.Attr,
+	var resp *handlerv1.HandleResponse
+	err := h.manager.HostCall(h.ctx, serverHost, 1, "gateway", "handler", rqId, "", "", func(ctx context.Context, cc *grpc.ClientConn) error {
+		handler := handlerv1.NewHandlerServiceClient(cc)
+		req := &handlerv1.HandleRequest{
+			ActionId: uint32(id),
+			Package:  data,
+			Gateway:  gateway,
+			Fd:       int64(c.Fd()),
+			BindIds:  c.Context().IdMap(),
+			Format:   format,
+			Typ:      h.tp,
 		}
-	}
-	resp, err := handler.Handle(context.Background(), req)
+		if c.Context().Authed() {
+			u := c.Context().User()
+			req.User = &handlerv1.HandleRequest_User{
+				Id:    int64(u.Id),
+				Name:  u.Name,
+				Attrs: u.Attr,
+			}
+		}
+		var err error
+		resp, err = handler.Handle(ctx, req)
+		return err
+	})
+
 	if err != nil {
 		return codec.Action{}, nil, utils.NewWrappedError("handler call response failed", err)
 	}
