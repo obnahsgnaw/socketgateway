@@ -296,8 +296,8 @@ func (s *Server) Listen(act codec.Action, structure action.DataStructure, handle
 	})
 }
 
-func (s *Server) Send(c socket.Conn, id codec.Action, data codec.DataPtr) (err error) {
-	return s.eventHandler.SendAction(c, id, data)
+func (s *Server) Send(c socket.Conn, act codec.Action, data codec.DataPtr) (err error) {
+	return s.eventHandler.SendAction(c, act, data)
 }
 
 // RegEnabled reg http

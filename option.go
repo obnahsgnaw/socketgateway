@@ -107,6 +107,12 @@ func Ticker(name string, ticker eventhandler.TickHandler) Option {
 	}
 }
 
+func Interceptor(i func() error) Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.Interceptor(i))
+	}
+}
+
 func Engine(e socket.Engine) Option {
 	return func(s *Server) {
 		s.engine = e
