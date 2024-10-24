@@ -66,8 +66,8 @@ github.com/obnahsgnaw/application v0.17.10 h1:brwpmSyjmirMqQcvc2wF+yvdl5dCCe5GTl
 github.com/obnahsgnaw/application v0.17.10/go.mod h1:qb1XoqG6RtZPeg7yioOgAYbR209jQR9RwjvbnUgL2RY=
 github.com/obnahsgnaw/http v0.2.10 h1:Xlkd1shwFAqZ0q1aUv1PEBv0wbqxOCW6EYdqFZA8kFU=
 github.com/obnahsgnaw/http v0.2.10/go.mod h1:Q2hcEpUDFA/7vlAsyL8vGTQgZmx30Ihz9HFl6SfQ0Wg=
-github.com/obnahsgnaw/rpc v0.6.13 h1:FslfMNyEOTkgK9cv5tI0Fzu/+VPkvJMuUA35CD2FjCw=
-github.com/obnahsgnaw/rpc v0.6.13/go.mod h1:CwGC7fAwTkWqANOuPD0zOu6eOuCErm825YeASBY/ytg=
+github.com/obnahsgnaw/rpc v0.6.14 h1:D7QlEj9zbtNrdpt09K/rYCjgs6brOhuFLv6IuQQMlgA=
+github.com/obnahsgnaw/rpc v0.6.14/go.mod h1:CwGC7fAwTkWqANOuPD0zOu6eOuCErm825YeASBY/ytg=
 github.com/obnahsgnaw/socketapi v0.5.4 h1:EB6nA2oJTELRfqjezB+WFdnSVWzaFe+2Cy0XPXBmHLs=
 github.com/obnahsgnaw/socketapi v0.5.4/go.mod h1:4nnuHzzHpuO6fPOSl9qY1fnrD/UWubc3kp7ReEIpNtM=
 github.com/obnahsgnaw/socketutil v0.8.0 h1:W6SjdOZwUHIGEAIG2xLSJRdMAhiXfP/2V/j0HanKY0k=

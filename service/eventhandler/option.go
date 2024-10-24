@@ -84,3 +84,9 @@ func Ticker(name string, ticker TickHandler) Option {
 		event.AddTicker(name, ticker)
 	}
 }
+
+func Interceptor(i func() error) Option {
+	return func(event *Event) {
+		event.interceptor = i
+	}
+}

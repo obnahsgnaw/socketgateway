@@ -35,6 +35,7 @@ type Event struct {
 	crypto        Cryptor
 	staticEsKey   []byte // 认证之前采用固定密钥，认证之后采用认证后的密钥
 	defaultUser   *socket.AuthUser
+	interceptor   func() error
 }
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
@@ -87,7 +88,13 @@ func (e *Event) OnBoot(s *socket.Server) {
 }
 
 func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
-	e.log(c, "", "Connected", zapcore.InfoLevel)
+	defer utils.RecoverHandler("on open", func(err, stack string) {
+		if e.logger != nil {
+			e.logger.Error("on open err=" + err + ", stack=" + stack)
+		}
+	})
+	rqId := utils.GenLocalId("rq")
+	e.log(c, rqId, "Connected", zapcore.InfoLevel)
 	if e.crypto != nil {
 		c.Context().SetOptional("cryptKey", e.staticEsKey)
 	}
@@ -97,6 +104,16 @@ func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
 			Id:   strconv.Itoa(c.Fd()),
 			Type: "UID",
 		})
+	}
+	if e.interceptor != nil {
+		if err := e.interceptor(); err != nil {
+			e.log(c, "", "intercepted:"+err.Error(), zapcore.WarnLevel)
+			if actErr := e.gatewayErrorResponse(c, gatewayv1.GatewayError_InternalErr, 0, rqId); actErr != nil {
+				e.log(c, rqId, actErr.Error(), zapcore.ErrorLevel)
+			}
+			c.Context().SetOptional("close_reason", "close by interceptor: "+err.Error())
+			c.Close()
+		}
 	}
 }
 
