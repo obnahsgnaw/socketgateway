@@ -21,7 +21,7 @@ func NewConnService(s func() *socket.Server) *ConnService {
 
 func (gw *ConnService) Info(_ context.Context, in *connv1.ConnInfoRequest) (resp *connv1.ConnInfoResponse, err error) {
 	if in.Fd == 0 {
-		err = status.New(codes.InvalidArgument, "param:Fd is required").Err()
+		resp = &connv1.ConnInfoResponse{}
 		return
 	}
 	conn := gw.s().GetFdConn(int(in.Fd))

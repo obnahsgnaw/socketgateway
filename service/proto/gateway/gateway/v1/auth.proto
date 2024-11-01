@@ -5,11 +5,10 @@ import "google/protobuf/timestamp.proto";
 
 // 网关层认证的请求
 message AuthRequest{
-  string token = 1;  // 认证token
+  string token = 1;  // 认证token appid+空格+accessKey
 }
 
 // 网关层认证的响应
 message AuthResponse{
   bool success = 1; // 成功还是失败
-  bytes crypt_key = 2; // 后续动作的对称加密密钥
 }

@@ -15,12 +15,10 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"strconv"
-	"time"
 )
 
 func main() {
 	app := application.New(
-		application.NewCluster("dev", "Dev"),
 		"demo",
 		application.Debug(func() bool {
 			return true
@@ -33,23 +31,20 @@ func main() {
 			Level:      "debug",
 			TraceLevel: "error",
 		}),
-		application.EtcdRegister([]string{"127.0.0.1:2379"}, time.Second*5),
 	)
 	defer app.Release()
 
 	s := socketgateway.New(app, sockettype.WSS, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
 	s.With(socketgateway.Engine(net.New()))
 	l, _ := rpc2.NewListener(url.Host{Ip: "127.0.0.1", Port: 8002})
-	rps := rpc2.New(app, l, "gw", "gw", endtype.Frontend)
-	s.With(socketgateway.Rpc(rps, true))
-	e, _ := http.Default(url.Host{Ip: "127.0.0.1", Port: 8003}, &engine.Config{
+	rps := rpc2.New(app, l, "gw", "gw", endtype.Frontend, nil)
+	s.With(socketgateway.Rpc(rps))
+	e, _ := http.Default("127.0.0.1", 8003, &engine.Config{
 		Name:      "gw",
 		DebugMode: false,
-		LogDebug:  false,
 		Cors:      nil,
-		LogCnf:    nil,
 	})
-	s.With(socketgateway.Doc(e, true))
+	s.With(socketgateway.Doc(e))
 	s.With(socketgateway.Watcher(func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field) {
 		s.Logger().Debug(strconv.Itoa(c.Fd()) + ": " + msg)
 	}))

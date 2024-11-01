@@ -258,7 +258,7 @@
       <div class="file-heading">
         <h2 id="gateway/v1/actid.proto">gateway/v1/actid.proto</h2><a href="#title">Top</a>
       </div>
-      <p>Socket协议网关层协议</p><p>整体说明：</p><p>1. 协议结构为 GatewayPackage， 请求和响应都是这个结构, 包含action id 和 data， action id为业务标识， data为业务数据提</p><p>2. 网关层有3个主协议， ping-pong, authReq-authResp, gatewayErr</p><p>3. 先解析网关层包结构，跟进业务标识action解析对应的data结构</p><p>4. 如果有认证，向网关层进行auth认证，得到相关的加解密密钥</p><p>5. 向各个服务发起协议请求</p><p>认证说明：</p><p>1. 从用户中心获取用于认证的token</p><p>2. 发起auth协议</p><p>加解密说：</p><p>1. 未认证之前通过固定密钥进行加解密，比如ping-pong auth等</p><p>2. 认证之后采用认证返回的密钥来进行加解密（包含 ping-pong）</p><p>3. 加解密iv等追加到加密后数据的后端（8位、16位， 根据加解密方法确定）</p>
+      <p>Socket协议网关层协议</p><p>整体说明：</p><p>0. 发送流程：</p><p>- 建立连接后先发送一个尝试包， 服务端读取第一包的第一个字节来确定编解码类型 ‘{’ 或者 'j' 则认定为json结构（如果是‘j’会被去掉，如果是‘{‘则原样保留）</p><p>- 同时对第一个包进行加解密解析和响应，如果服务端未启用加解密 则不管是否有数据都会返回000,并抛弃掉第一包的数据，如果有加密则会解析， 如果失败则返回222， 正常则返回111，后续则可进行其他协议操作</p><p>- 构建业务data和action -> 封装成GatewayPackage -> 加密 -> 沾包封包处理 -> 发送到服务端 -> 服务端响应 -> 沾包拆包 -> 解密 -> GatewayPackage -> 解析action 和 data -> 解析data</p><p>1. 协议包结构为两层</p><p>- 网关层包GatewayPackage， 包含action id 和 data， action id为业务标识， data为业务数据提，请求和响应都是这个结构</p><p>- 业务数据包， 即 data， 为各个业务对应的数据结构</p><p>2. 网关层有3个主协议， ping-pong, authReq-authResp, gatewayErr</p><p>3. 先解析网关层包结构，跟进业务标识action解析对应的data结构</p><p>4. 如果有认证，向网关层进行auth认证，认证token格式为 appid+空格+token</p><p>5. 向各个服务发起协议请求</p><p>认证说明：</p><p>1. 从用户中心获取用于认证的token</p><p>2. 发起auth协议</p><p>加解密说明：</p><p>1. 先通过rsa加密aes-cbc的密钥+时间戳，发送一个尝试包 （注意 第一个字节补充上编码位），即第一包格式为 编码位+rsa密文包</p><p>2. 如果服务端启用了加解密， 解析成功则返回111，否则返回000，如果密钥格式有问题返回222(比如位数不对，时间戳过期等)</p><p>3. 后续的 通过aes 加密 GatewayPackage 正常解析</p>
 
       
 
@@ -280,7 +280,7 @@
               <tr>
                 <td>GatewayErr</td>
                 <td>1</td>
-                <td><p>ping 测试</p></td>
+                <td><p></p></td>
               </tr>
             
               <tr>
@@ -336,7 +336,7 @@
                   <td>token</td>
                   <td><a href="#string">string</a></td>
                   <td></td>
-                  <td><p>认证token </p></td>
+                  <td><p>认证token appid&#43;空格&#43;accessKey </p></td>
                 </tr>
               
             </tbody>
@@ -361,13 +361,6 @@
                   <td><a href="#bool">bool</a></td>
                   <td></td>
                   <td><p>成功还是失败 </p></td>
-                </tr>
-              
-                <tr>
-                  <td>crypt_key</td>
-                  <td><a href="#bytes">bytes</a></td>
-                  <td></td>
-                  <td><p>后续动作的对称加密密钥 </p></td>
                 </tr>
               
             </tbody>

@@ -172,7 +172,7 @@ func (m *Manager) getFlbServer(fd int, actionId codec.ActionId) string {
 	sort.Strings(flbK)
 
 	if fd <= 0 {
-		return list[flbK[0]]
+		return list[flbK[utils.RandInt(len(flbK))]]
 	}
 
 	index := fd % len(flbK)
@@ -210,7 +210,7 @@ func (m *Manager) GetAction(actionId codec.ActionId) (codec.Action, bool) {
 }
 
 // Dispatch the actions
-func (m *Manager) Dispatch(c socket.Conn, rqId string, name codec.Name, b codec.DataBuilder, actionId codec.ActionId, actionData []byte) (respAction codec.Action, respData []byte, err error) {
+func (m *Manager) Dispatch(c socket.Conn, rqId string, b codec.DataBuilder, actionId codec.ActionId, actionData []byte) (respAction codec.Action, respData []byte, err error) {
 	if _, s, h, ok := m.getHandler(actionId); ok {
 		p := s()
 		if err = b.Unpack(actionData, p); err != nil {
@@ -238,6 +238,6 @@ func (m *Manager) Dispatch(c socket.Conn, rqId string, name codec.Name, b codec.
 		err = errors.New("action manager error: no set remote action handler")
 		return
 	}
-	respAction, respData, err = m.remoteHandler.Call(rqId, s, m.gateway.String(), name.String(), c, actionId, actionData)
+	respAction, respData, err = m.remoteHandler.Call(rqId, s, m.gateway.String(), b.Name().String(), c, actionId, actionData)
 	return
 }

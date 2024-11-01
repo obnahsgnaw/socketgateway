@@ -34,7 +34,7 @@ func (gw *GroupService) JoinGroup(_ context.Context, in *groupv1.JoinGroupReques
 		return
 	}
 	if in.GetMember().GetFd() == 0 {
-		err = status.New(codes.InvalidArgument, "param:Member.Fd is required").Err()
+		resp = &groupv1.JoinGroupResponse{}
 		return
 	}
 	gw.s().Groups().GetGroup(in.GetGroup().GetName()).Join(int(in.Member.GetFd()), in.Member.GetId())
@@ -49,7 +49,7 @@ func (gw *GroupService) LeaveGroup(_ context.Context, in *groupv1.LeaveGroupRequ
 		return
 	}
 	if in.GetFd() == 0 {
-		err = status.New(codes.InvalidArgument, "param:Fd is required").Err()
+		resp = &groupv1.LeaveGroupResponse{}
 		return
 	}
 	gw.s().Groups().GetGroup(in.GetGroup().GetName()).Leave(int(in.GetFd()))

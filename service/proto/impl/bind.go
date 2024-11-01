@@ -21,7 +21,7 @@ func NewBindService(s func() *socket.Server) *BindService {
 
 func (gw *BindService) BindId(_ context.Context, in *bindv1.BindIdRequest) (resp *bindv1.BindIdResponse, err error) {
 	if in.Fd == 0 {
-		err = status.New(codes.InvalidArgument, "param:Fd is required").Err()
+		resp = &bindv1.BindIdResponse{}
 		return
 	}
 	if len(in.Ids) == 0 {
@@ -64,7 +64,7 @@ func (gw *BindService) BindExist(_ context.Context, in *bindv1.BindExistRequest)
 
 func (gw *BindService) UnBindId(_ context.Context, in *bindv1.UnBindIdRequest) (resp *bindv1.UnBindIdResponse, err error) {
 	if in.Fd == 0 {
-		err = status.New(codes.InvalidArgument, "param:fd is required").Err()
+		resp = &bindv1.UnBindIdResponse{}
 		return
 	}
 	if len(in.Types) == 0 {
