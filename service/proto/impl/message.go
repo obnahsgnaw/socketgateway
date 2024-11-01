@@ -48,7 +48,7 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 		})
 	}
 	if c == nil {
-		err = status.New(codes.NotFound, "connection not found").Err()
+		err = status.New(codes.NotFound, "connection not found or not support").Err()
 		return
 	}
 	n, _ := c.Context().GetOptional("coderName")

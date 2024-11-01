@@ -22,13 +22,11 @@ func NewSlbService(s func() *socket.Server) *SlbService {
 
 func (gw *SlbService) SetActionSlb(_ context.Context, in *slbv1.ActionSlbRequest) (resp *slbv1.ActionSLbResponse, err error) {
 	if in.Fd == 0 {
-		err = status.New(codes.InvalidArgument, "param:Fd is required").Err()
+		resp = &slbv1.ActionSLbResponse{Error: ""}
 		return
 	}
 
-	resp = &slbv1.ActionSLbResponse{
-		Error: "",
-	}
+	resp = &slbv1.ActionSLbResponse{Error: ""}
 	if in.Action <= 0 || in.Sbl <= 0 {
 		return
 	}

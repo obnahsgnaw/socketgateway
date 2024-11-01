@@ -9,7 +9,6 @@ import (
 	"github.com/obnahsgnaw/application/servertype"
 	"github.com/obnahsgnaw/application/service/regCenter"
 	http2 "github.com/obnahsgnaw/http"
-	"github.com/obnahsgnaw/socketgateway/asset"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/doc"
 	"html/template"
@@ -107,7 +106,7 @@ func (s *DocServer) RegInfo() *regCenter.RegInfo {
 // gateway及handler 文档主页模版
 func (s *DocServer) initTemplate() error {
 	t := template.New("socket-gw-index.tmpl")
-	tmpl, _ := asset.Asset("service/doc/html/index.tmpl")
+	tmpl, _ := doc.Assets.ReadFile("html/index.tmpl")
 	_, err := t.Parse(string(tmpl))
 	if err != nil {
 		return err

@@ -17,11 +17,11 @@ import (
 	groupv1 "github.com/obnahsgnaw/socketapi/gen/group/v1"
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
 	slbv1 "github.com/obnahsgnaw/socketapi/gen/slb/v1"
-	"github.com/obnahsgnaw/socketgateway/asset"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/action"
+	"github.com/obnahsgnaw/socketgateway/service/doc"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
 	gatewayv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/gateway/v1"
 	"github.com/obnahsgnaw/socketgateway/service/proto/impl"
@@ -41,35 +41,33 @@ const closeAction = 0
 // api    port === optional, for doc view page
 
 type Server struct {
-	app             *application.Application
-	id              string // 模块-子模块
-	name            string
-	endType         endtype.EndType
-	serverType      servertype.ServerType
-	socketType      sockettype.SocketType
-	host            url.Host
-	server          *socket.Server
-	engine          socket.Engine
-	rpcServer       *rpc2.Server
-	actManager      *action.Manager
-	actListeners    []func(*action.Manager)
-	eventHandler    *eventhandler.Event
-	docServer       *DocServer
-	cryptor         eventhandler.Cryptor
-	eo              []eventhandler.Option
-	logger          *zap.Logger
-	logCnf          *logger.Config
-	regInfo         *regCenter.RegInfo
-	handlerRegInfo  *regCenter.RegInfo
-	errs            []error
-	poll            bool
-	regEnable       bool
-	reuseAddr       bool
-	keepalive       uint
-	tickInterval    time.Duration
-	authProvider    AuthProvider
-	noAuthStaticKey []byte
-	running         bool
+	app            *application.Application
+	id             string // 模块-子模块
+	name           string
+	endType        endtype.EndType
+	serverType     servertype.ServerType
+	socketType     sockettype.SocketType
+	host           url.Host
+	server         *socket.Server
+	engine         socket.Engine
+	rpcServer      *rpc2.Server
+	actManager     *action.Manager
+	actListeners   []func(*action.Manager)
+	eventHandler   *eventhandler.Event
+	docServer      *DocServer
+	eo             []eventhandler.Option
+	logger         *zap.Logger
+	logCnf         *logger.Config
+	regInfo        *regCenter.RegInfo
+	handlerRegInfo *regCenter.RegInfo
+	errs           []error
+	poll           bool
+	regEnable      bool
+	reuseAddr      bool
+	keepalive      uint
+	tickInterval   time.Duration
+	authProvider   AuthProvider
+	running        bool
 }
 
 type AuthProvider interface {
@@ -296,6 +294,10 @@ func (s *Server) Listen(act codec.Action, structure action.DataStructure, handle
 	})
 }
 
+func (s *Server) Handler() *eventhandler.Event {
+	return s.eventHandler
+}
+
 func (s *Server) Send(c socket.Conn, act codec.Action, data codec.DataPtr) (err error) {
 	return s.eventHandler.SendAction(c, act, data)
 }
@@ -370,7 +372,7 @@ func (s *Server) docConfig() *DocConfig {
 			Title:      s.name,
 			Public:     true,
 			Provider: func() ([]byte, error) {
-				return asset.Asset("service/doc/html/gateway.html")
+				return doc.Assets.ReadFile("html/gateway.html")
 			},
 		},
 	}
@@ -405,19 +407,12 @@ func (s *Server) defaultListen() {
 			q := data.(*gatewayv1.AuthRequest)
 			respAction = action.New(gatewayv1.ActionId_AuthResp)
 			response := &gatewayv1.AuthResponse{
-				Success:  false,
-				CryptKey: nil,
+				Success: false,
 			}
 			respData = response
-			// 没有地址标识没启用认证 返回默认的密钥
 			if s.authProvider == nil {
 				response.Success = true
-				// 有加解密返回默认密钥
-				if s.cryptor != nil {
-					response.CryptKey = s.noAuthStaticKey
-				}
 			} else {
-				// 有认证
 				u, err := s.authProvider.GetAuthedUser(q.Token)
 				if err != nil {
 					s.Logger().Error(s.msg("auth action request resp error: err=" + err.Error()))
@@ -432,12 +427,6 @@ func (s *Server) defaultListen() {
 						Id:   strconv.Itoa(int(u.Id)),
 						Type: "UID",
 					})
-					var key []byte
-					if s.cryptor != nil {
-						key = s.cryptor.Type().RandKey()
-					}
-					c.Context().SetOptional("cryptKey", key)
-					response.CryptKey = key
 				}
 			}
 
@@ -503,4 +492,12 @@ func (s *Server) RegisterGatewayServer(key string) error {
 	}
 
 	return nil
+}
+
+func (s *Server) AuthEnabled() bool {
+	return s.eventHandler.AuthEnabled()
+}
+
+func (s *Server) Security() bool {
+	return s.eventHandler.Security()
 }

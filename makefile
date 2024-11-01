@@ -8,8 +8,7 @@ help:
 	@echo "    minor      : Generate minor version number"
 	@echo "    version    : Generate auto version number"
 	@echo "    changelog  : Generate change log file and modify tag"
-	@echo "    asset      : Generate doc asset"
-	@echo "    pb         : Generate all pb and asset"
+	@echo "    pb         : Generate all pb"
 	@echo "    gateway-pb : Generate gateway pb"
 
 .PHONY: test
@@ -62,13 +61,8 @@ changelog:
 	@git tag -a -f ${shell git describe --tags `git rev-list --tags --max-count=1`}
 	@echo "Done"
 
-.PHONY: asset
-asset:
-	@echo "Package asset file..."
-	@go-bindata -o=asset/asset.go -pkg=asset service/doc/html/...
-	@echo "Done"
 .PHONY: pb
-pb:gateway-pb asset
+pb:gateway-pb
 .PHONY: gateway-pb
 gateway-pb:
 	@echo "generate gateway proto..."

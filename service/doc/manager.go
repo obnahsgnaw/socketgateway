@@ -1,10 +1,14 @@
 package doc
 
 import (
+	"embed"
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"strings"
 	"sync"
 )
+
+//go:embed all:html
+var Assets embed.FS
 
 type Manager struct {
 	sync.Mutex
