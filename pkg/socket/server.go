@@ -112,6 +112,7 @@ func (s *Server) UnbindId(c Conn, id ConnId) {
 		c.Context().unbind(id)
 	}
 }
+
 func (s *Server) UnbindTypedId(c Conn, typ string) {
 	if typ != "" {
 		id := c.Context().TypedId(typ)

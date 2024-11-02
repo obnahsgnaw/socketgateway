@@ -9,9 +9,9 @@ import (
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/socketgateway/pkg/group"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/moc"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/action"
+	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
 	gatewayv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/gateway/v1"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
@@ -42,6 +42,7 @@ type Event struct {
 	secEncoder    security.Encoder
 	secEncode     bool
 	secTtl        int64 // second
+	ss            *socket.Server
 }
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
@@ -91,9 +92,11 @@ func (e *Event) With(options ...Option) {
 }
 
 func (e *Event) OnBoot(s *socket.Server) {
+	e.ss = s
 	if e.logger != nil {
 		e.logger.Info(utils.ToStr(s.Type().String(), " service[", strconv.Itoa(s.Port()), "] booted"))
 	}
+	e.proxyTick(e.ctx)
 }
 
 func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
@@ -117,7 +120,7 @@ func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
 			if actErr := e.gatewayErrorResponse(c, rqId, gatewayv1.GatewayError_InternalErr, 0); actErr != nil {
 				e.log(c, rqId, actErr.Error(), zapcore.ErrorLevel)
 			}
-			c.Context().SetOptional("close_reason", "close by interceptor: "+err.Error())
+			connutil.SetCloseReason(c, "close by interceptor: "+err.Error())
 			c.Close()
 		}
 	}
@@ -133,10 +136,8 @@ func (e *Event) OnClose(s *socket.Server, c socket.Conn, err error) {
 	if err != nil {
 		reason = err.Error()
 	} else {
-		r, ok := c.Context().GetOptional("close_reason")
-		if ok {
-			reason = r.(string)
-		} else {
+		reason = connutil.GetCloseReason(c)
+		if reason == "" {
 			reason = "unknown"
 		}
 	}
@@ -170,13 +171,14 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	}
 
 	// Initialize the encryption and decryption key
-	var hit bool
-	if _, hit, err = e.initCryptKey(c, initializedPkg); err != nil {
-		e.log(c, rqId, "parse crypt key failed, err="+err.Error(), zapcore.ErrorLevel)
-		return
-	}
-	if hit {
-		e.log(c, rqId, "parsed crypt key", zapcore.DebugLevel)
+	keyHit, secResponse, secErr := e.initCryptKey(c, initializedPkg)
+	if keyHit {
+		_ = c.Write([]byte(secResponse))
+		if secErr != nil {
+			e.log(c, rqId, "crypt key parse failed, err="+secErr.Error(), zapcore.ErrorLevel)
+		} else {
+			e.log(c, rqId, "crypt key parse success", zapcore.DebugLevel)
+		}
 		return
 	}
 
@@ -205,35 +207,28 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	}
 }
 
-func (e *Event) ProxyConn(c *moc.Conn, u *socket.AuthUser, coderName codec.Name, ignoreSecurity bool) {
-	if !e.authEnable {
-		c.Context().Auth(e.defaultUser)
-	} else {
-		if u != nil {
-			c.Context().Auth(u)
+func (e *Event) OnTick(s *socket.Server) (delay time.Duration) {
+	defer utils.RecoverHandler("on tick", func(err, stack string) {
+		if e.logger != nil {
+			e.logger.Error("on tick err=" + err + ", stack=" + stack)
 		}
-	}
-	protoCoder := codec.NewWebsocketCodec()
-	_, _, gatewayPkgCoder := e.codecProvider.GetByName(coderName)
-	dataCoder := e.codedProvider.Provider(coderName)
-	if !e.CoderInitialized(c) {
-		e.SetCoder(c, protoCoder, gatewayPkgCoder, dataCoder)
-	}
-	if e.Security() {
-		if !e.CryptoKeyInitialized(c) {
-			cryptKey := e.es.Type().RandKey()
-			if ignoreSecurity {
-				cryptKey = []byte("")
+	})
+	s.RangeConnections(func(c socket.Conn) bool {
+		for _, h := range e.tickHandlers {
+			if !h(s, c) {
+				break
 			}
-			e.SetCryptoKey(c, cryptKey)
 		}
-	}
+		return true
+	})
 
-	return
+	return e.tickInterval
 }
 
-func (e *Event) ProxyMessage(c *moc.Conn, rqId string, packedPkg []byte) (rqAction, respAction codec.Action, rqData, respData, respPackage []byte, err error) {
-	return e.handleMessage(c, rqId, packedPkg)
+func (e *Event) OnShutdown(s *socket.Server) {
+	if e.logger != nil {
+		e.logger.Info(utils.ToStr(s.Type().String(), "service[", strconv.Itoa(s.Port()), "] down"))
+	}
 }
 
 // HandleMessage handle message
@@ -309,30 +304,6 @@ func (e *Event) handleMessage(c socket.Conn, rqId string, packedPkg []byte) (rqA
 	return
 }
 
-func (e *Event) OnTick(s *socket.Server) (delay time.Duration) {
-	defer utils.RecoverHandler("on tick", func(err, stack string) {
-		if e.logger != nil {
-			e.logger.Error("on tick err=" + err + ", stack=" + stack)
-		}
-	})
-	s.RangeConnections(func(c socket.Conn) bool {
-		for _, h := range e.tickHandlers {
-			if !h(s, c) {
-				break
-			}
-		}
-		return true
-	})
-
-	return e.tickInterval
-}
-
-func (e *Event) OnShutdown(s *socket.Server) {
-	if e.logger != nil {
-		e.logger.Info(utils.ToStr(s.Type().String(), "service[", strconv.Itoa(s.Port()), "] down"))
-	}
-}
-
 func (e *Event) log(c socket.Conn, rqId, msg string, l zapcore.Level, data ...zap.Field) {
 	if rqId != "" {
 		data = append(data, zap.String("rq_id", rqId))
@@ -370,17 +341,17 @@ func (e *Event) initCodec(c socket.Conn, rqId string, pkg []byte) (initializedPk
 	return
 }
 
-func (e *Event) initCryptKey(c socket.Conn, pkg []byte) (cryptKey []byte, hit bool, err error) {
+func (e *Event) initCryptKey(c socket.Conn, pkg []byte) (hit bool, response string, err error) {
 	if !e.CryptoKeyInitialized(c) {
 		hit = true
 		if e.Security() {
 			var keys []byte
 			if keys, err = e.rsa.Decrypt(pkg, e.privateKey, e.secEncode); err != nil {
-				_ = c.Write([]byte("222"))
+				response = "222"
 				return
 			}
 			if len(keys) != e.es.Type().KeyLen()+10 {
-				_ = c.Write([]byte("222"))
+				response = "222"
 				err = errors.New("invalid crypt key length")
 				return
 			}
@@ -388,24 +359,22 @@ func (e *Event) initCryptKey(c socket.Conn, pkg []byte) (cryptKey []byte, hit bo
 			timestamp := keys[e.es.Type().KeyLen():]
 			timestampInt, err1 := strconv.Atoi(string(timestamp))
 			if err1 != nil {
-				_ = c.Write([]byte("222"))
+				response = "222"
 				err = errors.New("invalid crypt key timestamp")
 				return
 			}
 			timeLimit := time.Now().Unix() - int64(timestampInt)
 			if timeLimit > e.secTtl || timeLimit < -e.secTtl {
-				_ = c.Write([]byte("222"))
+				response = "222"
 				err = errors.New("invalid crypt timestamp expire")
 				return
 			}
 			e.SetCryptoKey(c, key)
-			_ = c.Write([]byte("111"))
+			response = "111"
 		} else {
 			e.SetCryptoKey(c, []byte(""))
-			_ = c.Write([]byte("000"))
+			response = "000"
 		}
-	} else {
-		cryptKey = e.CryptoKey(c)
 	}
 	return
 }
@@ -439,61 +408,41 @@ func (e *Event) initProxy(pkg []byte) []byte {
 }
 
 func (e *Event) ProtoCoder(c socket.Conn) codec.Codec {
-	v, _ := c.Context().GetOptional("codec")
-	return v.(codec.Codec)
+	return connutil.ProtoCoder(c)
 }
 
 func (e *Event) GatewayPkgCoder(c socket.Conn) codec.PkgBuilder {
-	v, _ := c.Context().GetOptional("pkgBuilder")
-	return v.(codec.PkgBuilder)
+	return connutil.GatewayPkgCoder(c)
 }
 
 func (e *Event) DataCoder(c socket.Conn) codec.DataBuilder {
-	v, _ := c.Context().GetOptional("dataBuilder")
-	return v.(codec.DataBuilder)
+	return connutil.DataCoder(c)
 }
 
 func (e *Event) SetCoder(c socket.Conn, protoCoder codec.Codec, gatewayPkgCoder codec.PkgBuilder, dataCoder codec.DataBuilder) {
-	c.Context().SetOptional("coder", 1)
-	c.Context().SetOptional("codec", protoCoder)
-	c.Context().SetOptional("pkgBuilder", gatewayPkgCoder)
-	c.Context().SetOptional("dataBuilder", dataCoder)
+	connutil.SetCoder(c, protoCoder, gatewayPkgCoder, dataCoder)
 }
 
 func (e *Event) CoderInitialized(c socket.Conn) bool {
-	_, ok := c.Context().GetOptional("coder")
-	return ok
+	return connutil.CoderInitialized(c)
 }
 
 func (e *Event) SetCryptoKey(c socket.Conn, key []byte) {
-	c.Context().SetOptional("cryptKeyInitialized", 1)
-	c.Context().SetOptional("cryptKey", key)
+	connutil.SetCryptoKey(c, key)
 }
 
 func (e *Event) CryptoKey(c socket.Conn) []byte {
-	k, ok := c.Context().GetOptional("cryptKey")
-	if !ok {
-		return nil
-	}
-	return k.([]byte)
+	return connutil.CryptoKey(c)
 }
 
 func (e *Event) CryptoKeyInitialized(c socket.Conn) bool {
-	_, ok := c.Context().GetOptional("cryptKeyInitialized")
-	return ok
+	return connutil.CryptoKeyInitialized(c)
 }
 
 func (e *Event) codecDecode(c socket.Conn, pkg []byte, handler func(pkg []byte)) error {
-	if v, ok := c.Context().GetAndDelOptional("pkgTmp"); ok {
-		pkg = append(v.([]byte), pkg...)
-	}
-	temp, err := e.ProtoCoder(c).Unmarshal(pkg, handler)
-	if err != nil {
-		return err
-	}
-	c.Context().SetOptional("pkgTmp", temp)
-
-	return nil
+	return connutil.WithTempPackager(c, pkg, func(kg1 []byte) ([]byte, error) {
+		return e.ProtoCoder(c).Unmarshal(pkg, handler)
+	})
 }
 
 func (e *Event) codecEncode(c socket.Conn, pkg []byte) ([]byte, error) {
@@ -528,7 +477,12 @@ func (e *Event) authCheck(c socket.Conn, actionId gatewayv1.ActionId) bool {
 	return c.Context().Authed()
 }
 
-func (e *Event) decrypt(c socket.Conn, pkg []byte) ([]byte, error) {
+func (e *Event) decrypt(c socket.Conn, pkg []byte) (b []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err, _ = r.(error)
+		}
+	}()
 	key := e.CryptoKey(c)
 	if !e.Security() || len(pkg) == 0 || len(key) == 0 {
 		return pkg, nil
