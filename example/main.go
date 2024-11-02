@@ -14,11 +14,14 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/gnet"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/moc"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
+	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"io"
+	"log"
 	"strconv"
+	"time"
 )
 
 func main() {
@@ -75,25 +78,35 @@ H/HfPY4Tk5jbdjacazY8YySaSSk8/p5zsDIl2/irMZTR4DhDisCtIE69NvECQQCM
 UPVJ6NMli2MBL5Noj60dDNcNbKMS3D5yB2HxFf7PxEq+
 -----END rsa private key-----
 `)))
-
+	s.With(socketgateway.Tick(time.Second * 30))
+	s.With(socketgateway.Heartbeat(time.Second * 60))
 	// http 请求转发到tcp handler
 	e.Engine().POST("/test", func(c *gin.Context) {
-		// 初始化conn
-		cc := moc.NewHttpConn(1, c.Request)
-		var auth *socket.AuthUser
-		if s.AuthEnabled() {
-			// TODO 构建用户信息
+		// Parse the encoding and decoding code type from the header
+		coderType := c.Query("type")
+		if coderType == "" || (coderType != codec.Json.String() && coderType != codec.Proto.String()) {
+			coderType = codec.Json.String()
 		}
-		s.Handler().ProxyConn(cc, auth, codec.Json, true)
-
+		// 请求ID
+		id := c.Query("target")
+		if id == "" {
+			id = "1232123"
+		}
 		// 读取 请求数据
 		pkg, _ := io.ReadAll(c.Request.Body)
-		// 重新封包
 
-		// 或者直接转发
-		_, _, _, _, body, _ := s.Handler().ProxyMessage(cc, "123", pkg)
-		if len(body) > 0 {
-			c.String(200, string(body))
+		rqId := c.Request.Header.Get("X-Request-ID")
+
+		cc := moc.NewHttpConn(id, c.Request)
+		connutil.SetHeartbeatInterval(cc, 60)
+		rqAction, respAction, _, _, responsePkg, err := s.Handler().Proxy(cc, rqId, pkg, codec.Name(coderType))
+		if len(responsePkg) > 0 {
+			c.String(200, string(responsePkg))
+		}
+		if err != nil {
+			log.Println("rqAction:", rqAction.String(), "respAction", respAction.String(), "err:", err.Error())
+		} else {
+			log.Println("rqAction:", rqAction.String(), "respAction", respAction.String())
 		}
 	})
 

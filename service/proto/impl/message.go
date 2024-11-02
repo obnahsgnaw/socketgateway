@@ -5,6 +5,7 @@ import (
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
+	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -51,8 +52,7 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 		err = status.New(codes.NotFound, "connection not found or not support").Err()
 		return
 	}
-	n, _ := c.Context().GetOptional("coderName")
-	coderName := n.(codec.Name)
+	coderName := connutil.CoderName(c)
 	var msg []byte
 	if coderName == codec.Proto {
 		msg = in.PbMessage

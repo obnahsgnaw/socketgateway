@@ -7,37 +7,32 @@ import (
 )
 
 type Conn struct {
-	fd          int
+	id          string
 	connContext *socket.ConnContext
-	data        []byte
 	local       Addr
 	remote      Addr
+	closed      bool
 }
 
-func NewConn(fd int, local, remote Addr) *Conn {
+func NewConn(id string, local, remote Addr) *Conn {
 	return &Conn{
-		fd:          fd,
+		id:          id,
 		connContext: socket.NewContext(),
 		local:       local,
 		remote:      remote,
 	}
 }
 
-func NewHttpConn(fd int, q *http.Request) *Conn {
-	return &Conn{
-		fd:          fd,
-		connContext: socket.NewContext(),
-		local:       NewAddr("http", "127.0.0.1"),
-		remote:      NewAddr("http", q.RemoteAddr),
-	}
+func NewHttpConn(id string, q *http.Request) *Conn {
+	return NewConn(id, NewAddr("http", "127.0.0.1"), NewAddr("http", q.RemoteAddr))
+}
+
+func (c *Conn) Id() string {
+	return c.id
 }
 
 func (c *Conn) Fd() int {
 	return 0
-}
-
-func (c *Conn) RawFd() int {
-	return c.fd
 }
 
 func (c *Conn) Context() *socket.ConnContext {
@@ -45,16 +40,19 @@ func (c *Conn) Context() *socket.ConnContext {
 }
 
 func (c *Conn) Read() ([]byte, error) {
-	return c.data, nil
+	return nil, nil
 }
 
-func (c *Conn) Write(b []byte) error {
-	c.data = b
+func (c *Conn) Write([]byte) error {
 	return nil
 }
 
 func (c *Conn) Close() {
+	c.closed = true
+}
 
+func (c *Conn) Closed() bool {
+	return c.closed
 }
 
 func (c *Conn) LocalAddr() net.Addr {

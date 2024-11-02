@@ -5,6 +5,7 @@ import (
 	"github.com/obnahsgnaw/application/pkg/url"
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"github.com/panjf2000/gnet/v2/pkg/pool/goroutine"
 	"sort"
@@ -224,10 +225,8 @@ func (m *Manager) Dispatch(c socket.Conn, rqId string, b codec.DataBuilder, acti
 
 	flbNum := c.Fd()
 	// 可自定义flb-action.string：xxx 来知道conn对某个action的负载均衡策略
-	if v, ok := c.Context().GetOptional("flb-" + actionId.String()); ok {
-		if vv, ok := v.(int); ok {
-			flbNum = vv
-		}
+	if v := connutil.GetActionFlb(c, actionId); v > 0 {
+		flbNum = v
 	}
 	s := m.getFlbServer(flbNum, actionId)
 	if s == "" {
