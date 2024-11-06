@@ -55,6 +55,13 @@ func SetCoder(c socket.Conn, protoCoder codec.Codec, gatewayPkgCoder codec.PkgBu
 	c.Context().SetOptional("dataBuilder", dataCoder)
 }
 
+func ClearCoder(c socket.Conn) {
+	c.Context().DelOptional("coderName")
+	c.Context().DelOptional("codec")
+	c.Context().DelOptional("pkgBuilder")
+	c.Context().DelOptional("dataBuilder")
+}
+
 func CoderInitialized(c socket.Conn) bool {
 	_, ok := c.Context().GetOptional("coderName")
 	return ok
@@ -76,6 +83,11 @@ func CryptoKey(c socket.Conn) []byte {
 func CryptoKeyInitialized(c socket.Conn) bool {
 	_, ok := c.Context().GetOptional("cryptKeyInitialized")
 	return ok
+}
+
+func ClearCryptoKey(c socket.Conn) {
+	c.Context().DelOptional("cryptKeyInitialized")
+	c.Context().DelOptional("cryptKey")
 }
 
 func WithTempPackager(c socket.Conn, pkg []byte, f func(pkg []byte) ([]byte, error)) (err error) {

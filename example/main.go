@@ -99,7 +99,14 @@ UPVJ6NMli2MBL5Noj60dDNcNbKMS3D5yB2HxFf7PxEq+
 
 		cc := moc.NewHttpConn(id, c.Request)
 		connutil.SetHeartbeatInterval(cc, 60)
-		rqAction, respAction, _, _, responsePkg, err := s.Handler().Proxy(cc, rqId, pkg, codec.Name(coderType))
+		// init
+		if c.Query("tp") == "init" {
+			responsePkg, _ := s.Handler().ProxyInit(cc, codec.Name(coderType), pkg)
+			c.String(200, string(responsePkg))
+			return
+		}
+		// package
+		rqAction, respAction, _, _, responsePkg, err := s.Handler().Proxy(cc, rqId, pkg)
 		if len(responsePkg) > 0 {
 			c.String(200, string(responsePkg))
 		}
