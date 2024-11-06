@@ -36,8 +36,7 @@ func (m *ProxyManager) Remove(c *moc.Conn) {
 	m.connections.Delete(c.Id())
 }
 
-// Proxy The proxy forwards other requests to handler (client -> Forwarding adapter -> Proxy)
-func (e *Event) Proxy(c *moc.Conn, rqId string, packedPkg []byte, coderName codec.Name) (rqAction, respAction codec.Action, rqData, respData, respPackage []byte, err error) {
+func (e *Event) ProxyInit(c *moc.Conn, coderName codec.Name, packedPkg []byte) (respPackage []byte, err error) {
 	// Handle user login information
 	if !e.authEnable {
 		c.Context().Auth(e.defaultUser)
@@ -47,24 +46,36 @@ func (e *Event) Proxy(c *moc.Conn, rqId string, packedPkg []byte, coderName code
 			return
 		}
 	}
+	pm.Remove(c)
+	c = pm.Sync(c)
+	e.ClearCoder(c)
+	e.ClearCryptoKey(c)
+	// Codec initialization
+	protoCoder := codec.NewWebsocketCodec()
+	_, _, gatewayPkgCoder := e.codecProvider.GetByName(coderName)
+	dataCoder := e.codedProvider.Provider(coderName)
+	e.SetCoder(c, protoCoder, gatewayPkgCoder, dataCoder)
+	// Initialize the encryption and decryption key pair
+	_, response, keyErr := e.initCryptKey(c, packedPkg)
+	respPackage = []byte(response)
+	if keyErr != nil {
+		err = keyErr
+	}
+	return
+}
+
+// Proxy The proxy forwards other requests to handler (client -> Forwarding adapter -> Proxy)
+func (e *Event) Proxy(c *moc.Conn, rqId string, packedPkg []byte) (rqAction, respAction codec.Action, rqData, respData, respPackage []byte, err error) {
+	if e.interceptor != nil {
+		if err = e.interceptor(); err != nil {
+			return
+		}
+	}
 	c = pm.Sync(c)
 	// Codec initialization
-	if !e.CoderInitialized(c) {
-		protoCoder := codec.NewWebsocketCodec()
-		_, _, gatewayPkgCoder := e.codecProvider.GetByName(coderName)
-		dataCoder := e.codedProvider.Provider(coderName)
-		e.SetCoder(c, protoCoder, gatewayPkgCoder, dataCoder)
+	if !e.CoderInitialized(c) || !e.CryptoKeyInitialized(c) {
+		respPackage = []byte("222")
 	}
-	// Initialize the encryption and decryption key pair
-	hit, response, keyErr := e.initCryptKey(c, packedPkg)
-	if hit {
-		respPackage = []byte(response)
-		if keyErr != nil {
-			err = keyErr
-		}
-		return
-	}
-
 	// Process message packets
 	return e.handleMessage(c, rqId, packedPkg)
 }

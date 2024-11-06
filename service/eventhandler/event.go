@@ -423,12 +423,19 @@ func (e *Event) SetCoder(c socket.Conn, protoCoder codec.Codec, gatewayPkgCoder 
 	connutil.SetCoder(c, protoCoder, gatewayPkgCoder, dataCoder)
 }
 
+func (e *Event) ClearCoder(c socket.Conn) {
+	connutil.ClearCoder(c)
+}
+
 func (e *Event) CoderInitialized(c socket.Conn) bool {
 	return connutil.CoderInitialized(c)
 }
 
 func (e *Event) SetCryptoKey(c socket.Conn, key []byte) {
 	connutil.SetCryptoKey(c, key)
+}
+func (e *Event) ClearCryptoKey(c socket.Conn) {
+	connutil.ClearCryptoKey(c)
 }
 
 func (e *Event) CryptoKey(c socket.Conn) []byte {
