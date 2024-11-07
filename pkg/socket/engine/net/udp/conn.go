@@ -1,4 +1,4 @@
-package net
+package udp
 
 import (
 	"errors"
@@ -6,7 +6,7 @@ import (
 	"net"
 )
 
-type UdpConn struct {
+type Conn struct {
 	fd          int
 	connContext *socket.ConnContext
 	raw         *net.UDPConn
@@ -17,9 +17,9 @@ type UdpConn struct {
 	remoteAddr  *net.UDPAddr
 }
 
-func newUdpConn(fd int, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(udpAddr *net.UDPAddr)) *UdpConn {
+func newConn(fd int, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(udpAddr *net.UDPAddr)) *Conn {
 	c.LocalAddr()
-	return &UdpConn{
+	return &Conn{
 		fd:          fd,
 		connContext: ctx,
 		raw:         c,
@@ -29,15 +29,15 @@ func newUdpConn(fd int, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx 
 	}
 }
 
-func (c *UdpConn) Fd() int {
+func (c *Conn) Fd() int {
 	return c.fd
 }
 
-func (c *UdpConn) Context() *socket.ConnContext {
+func (c *Conn) Context() *socket.ConnContext {
 	return c.connContext
 }
 
-func (c *UdpConn) Read() ([]byte, error) {
+func (c *Conn) Read() ([]byte, error) {
 	if len(c.pkg) == 0 {
 		return nil, errors.New("conn error: no data to read")
 	}
@@ -46,21 +46,21 @@ func (c *UdpConn) Read() ([]byte, error) {
 	return b, nil
 }
 
-func (c *UdpConn) Write(b []byte) error {
+func (c *Conn) Write(b []byte) error {
 	_, err := c.raw.WriteToUDP(b, c.addr)
 	return err
 }
 
-func (c *UdpConn) Close() {
+func (c *Conn) Close() {
 	if c.closeCb != nil {
 		c.closeCb(c.addr)
 	}
 }
 
-func (c *UdpConn) LocalAddr() net.Addr {
+func (c *Conn) LocalAddr() net.Addr {
 	return c.localAddr
 }
 
-func (c *UdpConn) RemoteAddr() net.Addr {
+func (c *Conn) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
