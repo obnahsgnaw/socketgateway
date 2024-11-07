@@ -175,7 +175,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	if keyHit {
 		_ = c.Write([]byte(secResponse))
 		if secErr != nil {
-			e.log(c, rqId, "crypt key parse failed, err="+secErr.Error(), zapcore.ErrorLevel)
+			e.log(c, rqId, "crypt key parse failed, err="+secErr.Error(), zapcore.WarnLevel)
 		} else {
 			e.log(c, rqId, "crypt key parse success", zapcore.DebugLevel)
 		}
@@ -187,7 +187,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		e.log(c, rqId, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
 		rqAction, respAction, rqData, respData, respPackage, err1 := e.handleMessage(c, rqId, packedPkg)
 		if err1 != nil {
-			e.log(c, rqId, "package handled: request action="+rqAction.String()+err1.Error(), zapcore.ErrorLevel)
+			e.log(c, rqId, "package handled: request action="+rqAction.String()+err1.Error(), zapcore.WarnLevel)
 		} else {
 			e.log(c, rqId, "package handled: request action="+rqAction.String()+", response action="+respAction.String(), zapcore.InfoLevel, zap.String("rq_action", rqAction.String()), zap.String("resp_action", respAction.String()), zap.ByteString("rq_data", rqData), zap.ByteString("resp_data", respData))
 		}
@@ -200,7 +200,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		}
 	})
 	if err != nil {
-		e.log(c, rqId, "codec decode failed, err="+err.Error(), zapcore.ErrorLevel, zap.ByteString("package", initializedPkg))
+		e.log(c, rqId, "codec decode failed, err="+err.Error(), zapcore.WarnLevel, zap.ByteString("package", initializedPkg))
 		if err = e.gatewayErrorResponse(c, rqId, gatewayv1.GatewayError_PackageErr, 0); err != nil {
 			e.log(c, rqId, err.Error(), zapcore.ErrorLevel)
 		}
@@ -579,7 +579,7 @@ func (e *Event) write(c socket.Conn, data []byte) (err error) {
 // Send Sends data that the packet has already encoded，It is mainly used to send encoded data sent by a handler
 func (e *Event) Send(c socket.Conn, rqId string, a codec.Action, data []byte) (err error) {
 	if data, err = e.pack(c, a, data); err != nil {
-		e.log(c, rqId, "send action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("pkg", data))
+		e.log(c, rqId, "pack action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("pkg", data))
 		return
 	}
 	if err = e.write(c, data); err != nil {
@@ -594,7 +594,7 @@ func (e *Event) Send(c socket.Conn, rqId string, a codec.Action, data []byte) (e
 func (e *Event) SendAction(c socket.Conn, a codec.Action, data codec.DataPtr) (err error) {
 	var packData []byte
 	if packData, err = e.packRaw(c, a, data); err != nil {
-		e.log(c, "", "send action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.Any("pkg", data))
+		e.log(c, "", "pack action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.Any("pkg", data))
 		return
 	}
 
