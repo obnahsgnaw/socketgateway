@@ -68,7 +68,9 @@ func (c *Conn) Write(b []byte) error {
 }
 
 func (c *Conn) Close() {
-	_ = c.raw.Close()
+	if c.raw != nil {
+		_ = c.raw.Close()
+	}
 }
 
 func (c *Conn) LocalAddr() net.Addr {

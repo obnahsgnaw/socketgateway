@@ -1,4 +1,4 @@
-package net
+package websocket
 
 import (
 	"errors"
@@ -8,7 +8,7 @@ import (
 	"sync"
 )
 
-type WssConn struct {
+type Conn struct {
 	fd          int
 	connContext *socket.ConnContext
 	raw         *websocket.Conn
@@ -17,23 +17,23 @@ type WssConn struct {
 	l           sync.Mutex
 }
 
-func newWssConn(fd int, c *websocket.Conn, ctx *socket.ConnContext) *WssConn {
-	return &WssConn{
+func newWssConn(fd int, c *websocket.Conn, ctx *socket.ConnContext) *Conn {
+	return &Conn{
 		fd:          fd,
 		connContext: ctx,
 		raw:         c,
 	}
 }
 
-func (c *WssConn) Fd() int {
+func (c *Conn) Fd() int {
 	return c.fd
 }
 
-func (c *WssConn) Context() *socket.ConnContext {
+func (c *Conn) Context() *socket.ConnContext {
 	return c.connContext
 }
 
-func (c *WssConn) Read() ([]byte, error) {
+func (c *Conn) Read() ([]byte, error) {
 	if len(c.pkg) == 0 {
 		return nil, errors.New("conn error: no data to read")
 	}
@@ -42,20 +42,22 @@ func (c *WssConn) Read() ([]byte, error) {
 	return b, nil
 }
 
-func (c *WssConn) Write(b []byte) error {
+func (c *Conn) Write(b []byte) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 	return c.raw.WriteMessage(websocket.TextMessage, b)
 }
 
-func (c *WssConn) Close() {
-	_ = c.raw.Close()
+func (c *Conn) Close() {
+	if c.raw != nil {
+		_ = c.raw.Close()
+	}
 }
 
-func (c *WssConn) LocalAddr() net.Addr {
+func (c *Conn) LocalAddr() net.Addr {
 	return c.raw.LocalAddr()
 }
 
-func (c *WssConn) RemoteAddr() net.Addr {
+func (c *Conn) RemoteAddr() net.Addr {
 	return c.raw.RemoteAddr()
 }

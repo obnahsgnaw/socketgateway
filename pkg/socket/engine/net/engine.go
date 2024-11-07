@@ -29,7 +29,7 @@ func New() *Engine {
 	return &Engine{}
 }
 
-func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t sockettype.SocketType, p int, c *socket.Config) (err error) {
+func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t sockettype.SocketType, port int, c *socket.Config) (err error) {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("%v\n", err)
@@ -38,15 +38,15 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	e.server = s
 	e.event = ee
 	e.ctx, e.cancel = context.WithCancel(ctx)
-	e.addr = t.String() + "://:" + strconv.Itoa(p)
+	e.addr = t.String() + "://:" + strconv.Itoa(port)
 	var handler engineHandler
 
 	if t.IsTcp() {
 		handler = newTcpEngineHandler(e, e.addr)
 	} else if t.IsUdp() {
-		handler = newUdpEngineHandler(e, t.String(), p)
+		handler = newUdpEngineHandler(e, t.String(), port)
 	} else if t.IsWss() {
-		handler = newWssEngineHandler(e, p)
+		handler = newWssEngineHandler(e, port)
 	} else {
 		return errors.New("socket engine error: not support now")
 	}
@@ -69,7 +69,7 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 		}(e.ctx)
 	}
 
-	handler.Run()
+	handler.Run(e.ctx)
 
 	e.event.OnShutdown(e.server)
 	return nil
@@ -93,5 +93,5 @@ func parseProtoAddr(addr string) (network, address string) {
 
 type engineHandler interface {
 	Init() error
-	Run()
+	Run(context.Context)
 }
