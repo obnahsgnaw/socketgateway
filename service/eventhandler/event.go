@@ -117,9 +117,6 @@ func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
 	if e.interceptor != nil {
 		if err := e.interceptor(); err != nil {
 			e.log(c, "", "intercepted:"+err.Error(), zapcore.WarnLevel)
-			if actErr := e.gatewayErrorResponse(c, rqId, gatewayv1.GatewayError_InternalErr, 0); actErr != nil {
-				e.log(c, rqId, actErr.Error(), zapcore.ErrorLevel)
-			}
 			connutil.SetCloseReason(c, "close by interceptor: "+err.Error())
 			c.Close()
 		}

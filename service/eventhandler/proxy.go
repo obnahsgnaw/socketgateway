@@ -75,6 +75,7 @@ func (e *Event) Proxy(c *moc.Conn, rqId string, packedPkg []byte) (rqAction, res
 	// Codec initialization
 	if !e.CoderInitialized(c) || !e.CryptoKeyInitialized(c) {
 		respPackage = []byte("222")
+		return
 	}
 	// Process message packets
 	return e.handleMessage(c, rqId, packedPkg)
