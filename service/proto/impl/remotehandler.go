@@ -52,6 +52,13 @@ func (h *RemoteHandler) Call(rqId, serverHost, gateway, format string, c socket.
 				Attrs: u.Attr,
 			}
 		}
+		target := c.Context().Authentication()
+		if target != nil {
+			req.Target = &handlerv1.HandleRequest_Target{
+				Type: target.Type,
+				Id:   target.Id,
+			}
+		}
 		var err error
 		resp, err = handler.Handle(ctx, req)
 		return err

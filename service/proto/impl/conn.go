@@ -46,6 +46,8 @@ func (gw *ConnService) Info(_ context.Context, in *connv1.ConnInfoRequest) (resp
 		Uid:           uid,
 		Uname:         uname,
 		SocketType:    gw.s().Type().String(),
+		TargetType:    conn.Context().Authentication().Type,
+		TargetId:      conn.Context().Authentication().Id,
 	}
 	return
 }
