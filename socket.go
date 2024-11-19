@@ -418,6 +418,7 @@ func (s *Server) defaultListen() {
 					s.Logger().Error(s.msg("auth action request resp error: err=" + err.Error()))
 					response.Success = false
 				} else {
+					// TODO 可以验证一下 Authentication 的ID
 					response.Success = true
 					if u.Attr == nil {
 						u.Attr = make(map[string]string)

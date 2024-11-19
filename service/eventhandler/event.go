@@ -43,19 +43,24 @@ type Event struct {
 	secEncode     bool
 	secTtl        int64 // second
 	ss            *socket.Server
+	authProviders map[string]AuthenticateProvider
 }
+
+// AuthenticateProvider 返回user即相当于做了用户认证
+type AuthenticateProvider func(auth *socket.Authentication, encryptedKey []byte, encoder security.Encoder, encoded, secEnable bool) (user *socket.AuthUser, decryptedKey []byte, err error)
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
 
 func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, options ...Option) *Event {
 	s := &Event{
-		ctx:          ctx,
-		am:           m,
-		st:           st,
-		tickHandlers: make(map[string]TickHandler),
-		rsa:          security.NewRsa(),
-		es:           security.NewEsCrypto(security.Aes256, security.CbcMode),
-		secTtl:       60,
+		ctx:           ctx,
+		am:            m,
+		st:            st,
+		tickHandlers:  make(map[string]TickHandler),
+		rsa:           security.NewRsa(),
+		es:            security.NewEsCrypto(security.Aes256, security.CbcMode),
+		secTtl:        60,
+		authProviders: make(map[string]AuthenticateProvider),
 	}
 	toData := func(p *codec.PKG) codec.DataPtr {
 		if p == nil {
@@ -82,6 +87,16 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 	}
 	s.codedProvider = codec.NewDbp()
 	s.With(options...)
+	s.AddTicker("authenticate-ticker", authenticateTicker(time.Second*10))
+	s.RegisterAuthenticate("user", func(auth *socket.Authentication, encryptedKey []byte, encoder security.Encoder, decoded, secEnable bool) (user *socket.AuthUser, decryptedKey []byte, err error) {
+		if secEnable {
+			decryptedKey, err = s.rsa.Decrypt(encryptedKey, s.privateKey, decoded)
+		}
+		if !s.authEnable {
+			user = s.defaultUser
+		}
+		return
+	})
 	return s
 }
 
@@ -107,13 +122,6 @@ func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
 	})
 	rqId := utils.GenLocalId("rq")
 	e.log(c, rqId, "Connected", zapcore.InfoLevel)
-	if !e.authEnable {
-		c.Context().Auth(e.defaultUser)
-		s.BindId(c, socket.ConnId{
-			Id:   strconv.Itoa(c.Fd()),
-			Type: "UID",
-		})
-	}
 	if e.interceptor != nil {
 		if err := e.interceptor(); err != nil {
 			e.log(c, "", "intercepted:"+err.Error(), zapcore.WarnLevel)
@@ -161,14 +169,9 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		e.log(c, rqId, "read failed, err="+err.Error(), zapcore.ErrorLevel)
 		return
 	}
-	// Initialize the codec
-	initializedPkg := e.initCodec(c, rqId, rawPkg)
-	if len(initializedPkg) == 0 {
-		return
-	}
 
 	// Initialize the encryption and decryption key
-	keyHit, secResponse, secErr := e.initCryptKey(c, initializedPkg)
+	keyHit, secResponse, initPackage, secErr := e.authenticate(c, rqId, rawPkg)
 	if keyHit {
 		_ = c.Write([]byte(secResponse))
 		if secErr != nil {
@@ -178,9 +181,12 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		}
 		return
 	}
+	if len(initPackage) == 0 {
+		return
+	}
 
 	// Unpacking a protocol package
-	err = e.codecDecode(c, initializedPkg, func(packedPkg []byte) {
+	err = e.codecDecode(c, initPackage, func(packedPkg []byte) {
 		e.log(c, rqId, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
 		rqAction, respAction, rqData, respData, respPackage, err1 := e.handleMessage(c, rqId, packedPkg)
 		if err1 != nil {
@@ -197,7 +203,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		}
 	})
 	if err != nil {
-		e.log(c, rqId, "codec decode failed, err="+err.Error(), zapcore.WarnLevel, zap.ByteString("package", initializedPkg))
+		e.log(c, rqId, "codec decode failed, err="+err.Error(), zapcore.WarnLevel, zap.ByteString("package", initPackage))
 		if err = e.gatewayErrorResponse(c, rqId, gatewayv1.GatewayError_PackageErr, 0); err != nil {
 			e.log(c, rqId, err.Error(), zapcore.ErrorLevel)
 		}
@@ -320,39 +326,71 @@ func (e *Event) AddTicker(name string, ticker TickHandler) {
 	e.tickHandlers[name] = ticker
 }
 
-func (e *Event) initCodec(c socket.Conn, rqId string, pkg []byte) (initializedPkg []byte) {
-	if e.CoderInitialized(c) {
-		initializedPkg = pkg
-	} else {
-		// 处理proxy
-		if pkg = e.initProxy(pkg); len(pkg) == 0 {
-			initializedPkg = nil
-			return
-		}
-		dataCoderName, protoCoder, gatewayPkgCoder, initPkg := e.codecProvider.ParseByPackage(pkg)
-		initializedPkg = initPkg
-		e.SetCoder(c, protoCoder, gatewayPkgCoder, e.codedProvider.Provider(dataCoderName))
-		e.log(c, rqId, utils.ToStr("data format=", dataCoderName.String()), zapcore.InfoLevel)
-	}
-
-	return
+func (e *Event) initCodec(c socket.Conn, rqId string, name codec.Name) {
+	dataCoderName, protoCoder, gatewayPkgCoder := e.codecProvider.GetByName(name)
+	e.SetCoder(c, protoCoder, gatewayPkgCoder, e.codedProvider.Provider(dataCoderName))
+	e.log(c, rqId, utils.ToStr("data format=", dataCoderName.String()), zapcore.InfoLevel)
 }
 
-func (e *Event) initCryptKey(c socket.Conn, pkg []byte) (hit bool, response string, err error) {
+func (e *Event) RegisterAuthenticate(name string, provider AuthenticateProvider) {
+	e.authProviders[name] = provider
+}
+
+// 类型@标识@类型:{key 时间戳}
+func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, response string, initPackage []byte, err error) {
 	if !e.CryptoKeyInitialized(c) {
+		// 处理proxy
+		if pkg = e.initProxy(pkg); len(pkg) == 0 {
+			return
+		}
+
 		hit = true
-		if e.Security() {
-			var keys []byte
-			if keys, err = e.rsa.Decrypt(pkg, e.privateKey, e.secEncode); err != nil {
+		var authentication *socket.Authentication
+		codeType := codec.Proto
+		if bytes.Contains(pkg, []byte("::")) {
+			parts := bytes.SplitN(pkg, []byte("::"), 2)
+			typeIdentify := parts[0]
+			pkg = parts[1]
+			if !bytes.Contains(typeIdentify, []byte("@")) {
+				response = "222"
+				err = errors.New("type identify key format error")
+				return
+			}
+			if parts = bytes.SplitN(typeIdentify, []byte("@"), 3); len(parts) != 3 {
+				response = "222"
+				err = errors.New("type identify format error")
+				return
+			}
+			authentication = &socket.Authentication{Type: string(parts[0]), Id: string(parts[1])}
+			if string(parts[2]) == codec.Json.String() {
+				codeType = codec.Json
+			}
+		} else {
+			authentication = &socket.Authentication{Type: "user", Id: ""}
+			codeType = codec.Json
+		}
+
+		var keys []byte
+		var user *socket.AuthUser
+		if ap, ok := e.authProviders[authentication.Type]; !ok {
+			response = "222"
+			err = errors.New("authentication types that are not supported")
+			return
+		} else {
+			if user, keys, err = ap(authentication, pkg, e.secEncoder, e.secEncode, e.Security()); err != nil {
 				response = "222"
 				return
 			}
+		}
+
+		var key []byte
+		if e.Security() {
 			if len(keys) != e.es.Type().KeyLen()+10 {
 				response = "222"
 				err = errors.New("invalid crypt key length")
 				return
 			}
-			key := keys[:e.es.Type().KeyLen()]
+			key = keys[:e.es.Type().KeyLen()]
 			timestamp := keys[e.es.Type().KeyLen():]
 			timestampInt, err1 := strconv.Atoi(string(timestamp))
 			if err1 != nil {
@@ -366,13 +404,30 @@ func (e *Event) initCryptKey(c socket.Conn, pkg []byte) (hit bool, response stri
 				err = errors.New("invalid crypt timestamp expire")
 				return
 			}
-			e.SetCryptoKey(c, key)
 			response = "111"
 		} else {
-			e.SetCryptoKey(c, []byte(""))
+			key = []byte("")
 			response = "000"
 		}
+
+		e.log(c, rqId, utils.ToStr("authenticate type=", authentication.Type, "authenticate id=", authentication.Id), zapcore.InfoLevel)
+		c.Context().Authenticate(authentication)
+		if user != nil {
+			c.Context().Auth(user)
+			e.ss.BindId(c, socket.ConnId{
+				Id:   strconv.Itoa(int(user.Id)),
+				Type: "UID",
+			})
+			e.log(c, rqId, utils.ToStr("authenticate with user=", user.Name), zapcore.InfoLevel)
+		}
+		e.SetCryptoKey(c, key)
+		if len(key) > 0 {
+			e.log(c, rqId, "authenticate with security", zapcore.InfoLevel)
+		}
+		e.initCodec(c, rqId, codeType)
+		return
 	}
+	initPackage = pkg
 	return
 }
 

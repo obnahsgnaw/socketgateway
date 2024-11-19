@@ -38,9 +38,6 @@ func (m *ProxyManager) Remove(c *moc.Conn) {
 
 func (e *Event) ProxyInit(c *moc.Conn, coderName codec.Name, packedPkg []byte) (respPackage []byte, err error) {
 	// Handle user login information
-	if !e.authEnable {
-		c.Context().Auth(e.defaultUser)
-	}
 	if e.interceptor != nil {
 		if err = e.interceptor(); err != nil {
 			return
@@ -50,13 +47,9 @@ func (e *Event) ProxyInit(c *moc.Conn, coderName codec.Name, packedPkg []byte) (
 	c = pm.Sync(c)
 	e.ClearCoder(c)
 	e.ClearCryptoKey(c)
-	// Codec initialization
-	protoCoder := codec.NewWebsocketCodec()
-	_, _, gatewayPkgCoder := e.codecProvider.GetByName(coderName)
-	dataCoder := e.codedProvider.Provider(coderName)
-	e.SetCoder(c, protoCoder, gatewayPkgCoder, dataCoder)
+	c.Context().Authenticate(nil)
 	// Initialize the encryption and decryption key pair
-	_, response, keyErr := e.initCryptKey(c, packedPkg)
+	_, response, _, keyErr := e.authenticate(c, "", packedPkg)
 	respPackage = []byte(response)
 	if keyErr != nil {
 		err = keyErr

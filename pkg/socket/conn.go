@@ -18,12 +18,13 @@ type Conn interface {
 
 // ConnContext 连接conn的数据绑定
 type ConnContext struct {
-	connectedAt  time.Time
-	lastActiveAt time.Time
-	ids          map[string]ConnId // type=>ConnId
-	upgraded     bool
-	authUser     *AuthUser
-	optional     sync.Map
+	connectedAt    time.Time
+	lastActiveAt   time.Time
+	ids            map[string]ConnId // type=>ConnId
+	upgraded       bool
+	authUser       *AuthUser
+	optional       sync.Map
+	authentication *Authentication
 }
 
 // ConnId id绑定信息
@@ -36,6 +37,11 @@ type AuthUser struct {
 	Id   uint
 	Name string
 	Attr map[string]string
+}
+
+type Authentication struct {
+	Type string
+	Id   string
 }
 
 func (s *AuthUser) GetAttr(key, defVal string) string {
@@ -151,6 +157,18 @@ func (c *ConnContext) Authed() bool {
 
 func (c *ConnContext) User() *AuthUser {
 	return c.authUser
+}
+
+func (c *ConnContext) Authentication() *Authentication {
+	return c.authentication
+}
+
+func (c *ConnContext) Authenticated() bool {
+	return c.authentication != nil
+}
+
+func (c *ConnContext) Authenticate(a *Authentication) {
+	c.authentication = a
 }
 
 // GetOptional 返回自定义的数据
