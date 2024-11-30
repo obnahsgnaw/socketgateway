@@ -35,7 +35,6 @@ func Auth() Option {
 
 func DefaultUser(u *socket.AuthUser) Option {
 	return func(event *Event) {
-		event.authEnable = false
 		if u.Attr == nil {
 			u.Attr = make(map[string]string)
 		}
