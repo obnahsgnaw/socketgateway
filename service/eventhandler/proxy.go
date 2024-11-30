@@ -71,7 +71,16 @@ func (e *Event) Proxy(c *moc.Conn, rqId string, packedPkg []byte) (rqAction, res
 		return
 	}
 	// Process message packets
-	return e.handleMessage(c, rqId, packedPkg)
+	rqAction, respAction, rqData, respData, respPackage, err = e.handleMessage(c, rqId, packedPkg)
+	if len(respPackage) > 0 {
+		err1 := e.codecDecode(c, respPackage, func(pkg []byte) {
+			respPackage = pkg
+		})
+		if err1 != nil && err == nil {
+			err = err1
+		}
+	}
+	return
 }
 
 func (e *Event) proxyOnTick() time.Duration {

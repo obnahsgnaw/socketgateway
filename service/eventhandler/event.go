@@ -166,7 +166,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	// Read the data
 	rawPkg, err := c.Read()
 	if err != nil {
-		e.log(c, rqId, "read failed, err="+err.Error(), zapcore.ErrorLevel)
+		e.log(c, rqId, "read failed, err="+err.Error(), zapcore.WarnLevel)
 		return
 	}
 
@@ -486,6 +486,7 @@ func (e *Event) CoderInitialized(c socket.Conn) bool {
 func (e *Event) SetCryptoKey(c socket.Conn, key []byte) {
 	connutil.SetCryptoKey(c, key)
 }
+
 func (e *Event) ClearCryptoKey(c socket.Conn) {
 	connutil.ClearCryptoKey(c)
 }
