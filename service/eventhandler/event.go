@@ -3,10 +3,13 @@ package eventhandler
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"encoding/binary"
 	"errors"
-	"github.com/obnahsgnaw/application/pkg/security"
 	"github.com/obnahsgnaw/application/pkg/utils"
+	"github.com/obnahsgnaw/goutils/security/coder"
+	"github.com/obnahsgnaw/goutils/security/esutil"
+	"github.com/obnahsgnaw/goutils/security/rsautil"
 	"github.com/obnahsgnaw/socketgateway/pkg/group"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
@@ -37,9 +40,11 @@ type Event struct {
 	privateKey    []byte
 	defaultUser   *socket.AuthUser
 	interceptor   func() error
-	rsa           *security.RsaCrypto // 连接后第一包发送rsa加密 aes密钥@时间戳 交换密钥， 服务端 rsa解密得到aes 密钥， 后续使用其来解析aes cbc 加密的内容体， 内容体组成为：iv（16byte）+内容 (aes256 最小16字节) 一个内容最小32字节
-	es            *security.EsCrypto
-	secEncoder    security.Encoder
+	rsa           *rsautil.Rsa // 连接后第一包发送rsa加密 aes密钥@时间戳 交换密钥， 服务端 rsa解密得到aes 密钥， 后续使用其来解析aes cbc 加密的内容体， 内容体组成为：iv（16byte）+内容 (aes256 最小16字节) 一个内容最小32字节
+	es            *esutil.ADes
+	esTp          esutil.EsType
+	esMode        esutil.EsMode
+	secEncoder    coder.Encoder
 	secEncode     bool
 	secTtl        int64 // second
 	ss            *socket.Server
@@ -47,7 +52,7 @@ type Event struct {
 }
 
 // AuthenticateProvider 返回user即相当于做了用户认证
-type AuthenticateProvider func(auth *socket.Authentication, encryptedKey []byte, encoder security.Encoder, encoded, secEnable bool) (user *socket.AuthUser, decryptedKey []byte, err error)
+type AuthenticateProvider func(auth *socket.Authentication, encryptedKey []byte, encoder coder.Encoder, encoded, secEnable bool) (user *socket.AuthUser, decryptedKey []byte, err error)
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
 
@@ -57,8 +62,11 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 		am:            m,
 		st:            st,
 		tickHandlers:  make(map[string]TickHandler),
-		rsa:           security.NewRsa(),
-		es:            security.NewEsCrypto(security.Aes256, security.CbcMode),
+		rsa:           rsautil.New(rsautil.PKCS1Public(), rsautil.PKCS1Private(), rsautil.SignHash(crypto.SHA256), rsautil.Encoder(coder.B64StdEncoding)),
+		es:            esutil.New(esutil.Aes256, esutil.CbcMode, esutil.Encoder(coder.B64StdEncoding)),
+		esTp:          esutil.Aes256,
+		esMode:        esutil.CbcMode,
+		secEncoder:    coder.B64StdEncoding,
 		secTtl:        60,
 		authProviders: make(map[string]AuthenticateProvider),
 	}
@@ -88,7 +96,7 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 	s.codedProvider = codec.NewDbp()
 	s.With(options...)
 	s.AddTicker("authenticate-ticker", authenticateTicker(time.Second*10))
-	s.RegisterAuthenticate("user", func(auth *socket.Authentication, encryptedKey []byte, encoder security.Encoder, decoded, secEnable bool) (user *socket.AuthUser, decryptedKey []byte, err error) {
+	s.RegisterAuthenticate("user", func(auth *socket.Authentication, encryptedKey []byte, encoder coder.Encoder, decoded, secEnable bool) (user *socket.AuthUser, decryptedKey []byte, err error) {
 		if secEnable {
 			decryptedKey, err = s.rsa.Decrypt(encryptedKey, s.privateKey, decoded)
 		}
@@ -665,8 +673,4 @@ func (e *Event) AuthEnabled() bool {
 
 func (e *Event) Security() bool {
 	return len(e.privateKey) > 0
-}
-
-func (e *Event) Es() *security.EsCrypto {
-	return e.es
 }
