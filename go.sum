@@ -64,6 +64,8 @@ github.com/modern-go/reflect2 v1.0.2 h1:xBagoLtFs94CBntxluKeaWgTMpvLxC4ur3nMaC9G
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/obnahsgnaw/application v0.17.15 h1:+cIITWajNdasPAyAdAXjfzWTsIXe78ka8Q2UofxE7OY=
 github.com/obnahsgnaw/application v0.17.15/go.mod h1:qb1XoqG6RtZPeg7yioOgAYbR209jQR9RwjvbnUgL2RY=
+github.com/obnahsgnaw/goutils v0.6.0 h1:VXGnfvKHlpMPMIgPBxgix4cFwyH5T+r4FhaP/bUSixY=
+github.com/obnahsgnaw/goutils v0.6.0/go.mod h1:m8K1Sl7txCtuAGT6ge65PBHPiazRLEdcOPFkkhIDIbI=
 github.com/obnahsgnaw/http v0.2.10 h1:Xlkd1shwFAqZ0q1aUv1PEBv0wbqxOCW6EYdqFZA8kFU=
 github.com/obnahsgnaw/http v0.2.10/go.mod h1:Q2hcEpUDFA/7vlAsyL8vGTQgZmx30Ihz9HFl6SfQ0Wg=
 github.com/obnahsgnaw/rpc v0.6.14 h1:D7QlEj9zbtNrdpt09K/rYCjgs6brOhuFLv6IuQQMlgA=

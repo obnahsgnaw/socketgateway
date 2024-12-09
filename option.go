@@ -1,8 +1,9 @@
 package socketgateway
 
 import (
-	"github.com/obnahsgnaw/application/pkg/security"
 	"github.com/obnahsgnaw/application/pkg/utils"
+	"github.com/obnahsgnaw/goutils/security/coder"
+	"github.com/obnahsgnaw/goutils/security/esutil"
 	"github.com/obnahsgnaw/http"
 	rpc2 "github.com/obnahsgnaw/rpc"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
@@ -63,7 +64,7 @@ func Tick(interval time.Duration) Option {
 	}
 }
 
-func Crypto(esTp security.EsType, esMode security.EsMode) Option {
+func Crypto(esTp esutil.EsType, esMode esutil.EsMode) Option {
 	return func(s *Server) {
 		s.addEventOption(eventhandler.Crypto(esTp, esMode))
 	}
@@ -75,7 +76,7 @@ func SecPrivateKey(key []byte) Option {
 	}
 }
 
-func SecEncoder(encoder security.Encoder) Option {
+func SecEncoder(encoder coder.Encoder) Option {
 	return func(s *Server) {
 		s.addEventOption(eventhandler.SecEncoder(encoder))
 	}

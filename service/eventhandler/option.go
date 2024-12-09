@@ -1,7 +1,10 @@
 package eventhandler
 
 import (
-	"github.com/obnahsgnaw/application/pkg/security"
+	"crypto"
+	"github.com/obnahsgnaw/goutils/security/coder"
+	"github.com/obnahsgnaw/goutils/security/esutil"
+	"github.com/obnahsgnaw/goutils/security/rsautil"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
@@ -54,11 +57,11 @@ func SecPrivateKey(key []byte) Option {
 	}
 }
 
-func SecEncoder(encoder security.Encoder) Option {
+func SecEncoder(encoder coder.Encoder) Option {
 	return func(event *Event) {
 		event.secEncoder = encoder
-		event.rsa.SetEncoder(encoder)
-		event.es.SetEncoder(encoder)
+		event.rsa = rsautil.New(rsautil.PKCS1Public(), rsautil.PKCS1Private(), rsautil.SignHash(crypto.SHA256), rsautil.Encoder(encoder))
+		event.es = esutil.New(event.esTp, event.esMode, esutil.Encoder(encoder))
 	}
 }
 
@@ -74,12 +77,11 @@ func SecTtl(ttl int64) Option {
 	}
 }
 
-func Crypto(esTp security.EsType, esMode security.EsMode) Option {
+func Crypto(esTp esutil.EsType, esMode esutil.EsMode) Option {
 	return func(event *Event) {
-		event.es = security.NewEsCrypto(esTp, esMode)
-		if event.secEncoder != nil {
-			event.es.SetEncoder(event.secEncoder)
-		}
+		event.esTp = esTp
+		event.esMode = esMode
+		event.es = esutil.New(esTp, esMode, esutil.Encoder(event.secEncoder))
 	}
 }
 

@@ -5,12 +5,12 @@ import (
 	"github.com/obnahsgnaw/application"
 	"github.com/obnahsgnaw/application/endtype"
 	"github.com/obnahsgnaw/application/pkg/logging/logger"
-	"github.com/obnahsgnaw/application/pkg/security"
 	"github.com/obnahsgnaw/application/pkg/url"
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/application/regtype"
 	"github.com/obnahsgnaw/application/servertype"
 	"github.com/obnahsgnaw/application/service/regCenter"
+	"github.com/obnahsgnaw/goutils/randutil"
 	rpc2 "github.com/obnahsgnaw/rpc"
 	bindv1 "github.com/obnahsgnaw/socketapi/gen/bind/v1"
 	connv1 "github.com/obnahsgnaw/socketapi/gen/conninfo/v1"
@@ -229,7 +229,7 @@ func (s *Server) Run(failedCb func(error)) {
 		s.logger.Info(utils.ToStr("doc index url=", s.docServer.IndexDocUrl(), ", doc url=", s.docServer.DocUrl()))
 		docDesc := utils.ToStr("doc server[", s.docServer.engine.Host(), "] ")
 		s.logger.Info(docDesc + "start and serving...")
-		s.docServer.SyncStart(security.RandAlpha(6), failedCb)
+		s.docServer.SyncStart(randutil.RandAlpha(6), failedCb)
 		if s.app.Register() != nil {
 			s.logger.Debug("doc register start")
 			if err := s.app.DoRegister(s.docServer.regInfo, regLogCb); err != nil {
