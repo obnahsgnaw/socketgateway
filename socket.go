@@ -41,33 +41,35 @@ const closeAction = 0
 // api    port === optional, for doc view page
 
 type Server struct {
-	app            *application.Application
-	id             string // 模块-子模块
-	name           string
-	endType        endtype.EndType
-	serverType     servertype.ServerType
-	socketType     sockettype.SocketType
-	host           url.Host
-	server         *socket.Server
-	engine         socket.Engine
-	rpcServer      *rpc2.Server
-	actManager     *action.Manager
-	actListeners   []func(*action.Manager)
-	eventHandler   *eventhandler.Event
-	docServer      *DocServer
-	eo             []eventhandler.Option
-	logger         *zap.Logger
-	logCnf         *logger.Config
-	regInfo        *regCenter.RegInfo
-	handlerRegInfo *regCenter.RegInfo
-	errs           []error
-	poll           bool
-	regEnable      bool
-	reuseAddr      bool
-	keepalive      uint
-	tickInterval   time.Duration
-	authProvider   AuthProvider
-	running        bool
+	app             *application.Application
+	id              string // 模块-子模块
+	name            string
+	endType         endtype.EndType
+	rawServerType   servertype.ServerType
+	rawSocketType   sockettype.SocketType
+	proxySocketType sockettype.SocketType // The type of proxy, e.g. the gateway is UDP but handles TCP handlers
+	proxyServerType servertype.ServerType
+	host            url.Host
+	server          *socket.Server
+	engine          socket.Engine
+	rpcServer       *rpc2.Server
+	actManager      *action.Manager
+	actListeners    []func(*action.Manager)
+	eventHandler    *eventhandler.Event
+	docServer       *DocServer
+	eo              []eventhandler.Option
+	logger          *zap.Logger
+	logCnf          *logger.Config
+	regInfo         *regCenter.RegInfo
+	handlerRegInfo  *regCenter.RegInfo
+	errs            []error
+	poll            bool
+	regEnable       bool
+	reuseAddr       bool
+	keepalive       uint
+	tickInterval    time.Duration
+	authProvider    AuthProvider
+	running         bool
 }
 
 type AuthProvider interface {
@@ -89,28 +91,36 @@ func st2hdt(sst servertype.ServerType) servertype.ServerType {
 func New(app *application.Application, st sockettype.SocketType, et endtype.EndType, host url.Host, options ...Option) *Server {
 	var err error
 	s := &Server{
-		id:         "gateway-gateway",
-		name:       "gateway",
-		serverType: st.ToServerType(),
-		socketType: st,
-		endType:    et,
-		host:       host,
-		app:        app,
-		actManager: action.NewManager(),
+		id:              "gateway-gateway",
+		name:            "gateway",
+		rawServerType:   st.ToServerType(),
+		proxyServerType: st.ToServerType(),
+		rawSocketType:   st,
+		proxySocketType: st,
+		endType:         et,
+		host:            host,
+		app:             app,
+		actManager:      action.NewManager(),
 	}
-	if s.serverType == "" {
+	if s.rawServerType == "" {
 		s.addErr(errors.New(s.msg("type not support")))
 	}
 	s.logCnf = s.app.LogConfig()
-	s.logger = s.app.Logger().Named(utils.ToStr(s.serverType.String(), "-", s.endType.String(), "-", "gateway"))
+	s.logger = s.app.Logger().Named(utils.ToStr(s.rawServerType.String(), "-", s.endType.String(), "-", "gateway"))
 	s.addErr(err)
+	s.With(options...)
+	s.initRegInfo()
+	return s
+}
+
+func (s *Server) initRegInfo() {
 	s.regInfo = &regCenter.RegInfo{
 		AppId:   s.app.Cluster().Id(),
-		RegType: regtype.RegType(s.serverType),
+		RegType: regtype.RegType(s.proxyServerType),
 		ServerInfo: regCenter.ServerInfo{
 			Id:      s.id,
 			Name:    s.name,
-			Type:    s.serverType.String(),
+			Type:    s.proxyServerType.String(),
 			EndType: s.endType.String(),
 		},
 		Host: s.host.String(),
@@ -123,7 +133,7 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 		ServerInfo: regCenter.ServerInfo{
 			Id:      s.id,
 			Name:    s.name,
-			Type:    st2hdt(s.serverType).String(),
+			Type:    st2hdt(s.proxyServerType).String(),
 			EndType: s.endType.String(),
 		},
 		Host:      "",
@@ -131,8 +141,6 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 		Ttl:       s.app.RegTtl(),
 		KeyPreGen: regCenter.ActionRegKeyPrefixGenerator(),
 	}
-	s.With(options...)
-	return s
 }
 
 func (s *Server) With(options ...Option) {
@@ -153,7 +161,7 @@ func (s *Server) Name() string {
 
 // Type return the server end type
 func (s *Server) Type() servertype.ServerType {
-	return s.serverType
+	return s.rawServerType
 }
 
 // EndType return the server end type
@@ -195,8 +203,8 @@ func (s *Server) Run(failedCb func(error)) {
 		s.logger.Info("socket engine initialize(customer)")
 	}
 	s.addEventOption(eventhandler.Logger(s.logger))
-	s.eventHandler = eventhandler.New(s.app.Context(), s.actManager, s.socketType, s.eo...)
-	s.server = socket.New(s.app.Context(), s.socketType, s.host.Port, s.engine, s.eventHandler, &socket.Config{
+	s.eventHandler = eventhandler.New(s.app.Context(), s.actManager, s.rawSocketType, s.eo...)
+	s.server = socket.New(s.app.Context(), s.rawSocketType, s.host.Port, s.engine, s.eventHandler, &socket.Config{
 		MultiCore: true,
 		Keepalive: s.keepalive,
 		NoDelay:   true,
@@ -357,7 +365,7 @@ func (s *Server) initRpc() {
 		})
 		s.actManager.With(action.CloseAction(closeAction))
 		s.actManager.With(action.Gateway(s.rpcServer.Host()))
-		s.actManager.With(action.RtHandler(impl.NewRemoteHandler(s.app.Context(), s.logger, impl.St2hct(s.socketType))))
+		s.actManager.With(action.RtHandler(impl.NewRemoteHandler(s.app.Context(), s.logger, impl.St2hct(s.proxySocketType))))
 	}
 }
 
@@ -365,10 +373,10 @@ func (s *Server) docConfig() *DocConfig {
 	return &DocConfig{
 		id:       s.id,
 		endType:  s.endType,
-		servType: s.serverType,
+		servType: s.proxyServerType,
 		RegTtl:   s.app.RegTtl(),
 		Doc: DocItem{
-			socketType: s.socketType,
+			socketType: s.proxySocketType,
 			Title:      s.name,
 			Public:     true,
 			Provider: func() ([]byte, error) {

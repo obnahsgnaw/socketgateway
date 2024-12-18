@@ -7,6 +7,7 @@ import (
 	"github.com/obnahsgnaw/http"
 	rpc2 "github.com/obnahsgnaw/rpc"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"time"
@@ -109,7 +110,7 @@ func CodedProvider(p codec.DataBuilderProvider) Option {
 func Rpc(ins *rpc2.Server) Option {
 	return func(s *Server) {
 		s.rpcServer = ins
-		s.rpcServer.AddRegInfo(s.socketType.String()+"-gateway", utils.ToStr(s.socketType.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, s.serverType))
+		s.rpcServer.AddRegInfo(s.rawSocketType.String()+"-gateway", utils.ToStr(s.rawSocketType.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, s.rawServerType))
 	}
 }
 
@@ -140,5 +141,12 @@ func Interceptor(i func() error) Option {
 func Engine(e socket.Engine) Option {
 	return func(s *Server) {
 		s.engine = e
+	}
+}
+
+func Proxy(st sockettype.SocketType) Option {
+	return func(s *Server) {
+		s.proxySocketType = st
+		s.proxyServerType = st.ToServerType()
 	}
 }
