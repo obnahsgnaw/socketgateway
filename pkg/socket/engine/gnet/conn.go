@@ -16,14 +16,38 @@ type Conn struct {
 	raw         gnet.Conn
 	pkg         [][]byte
 	err         error
+	remoteAddr  net.Addr
+	localAddr   net.Addr
+	closeFn     func()
+	udp         bool
 }
 
-func newConn(c gnet.Conn, ctx *socket.ConnContext) *Conn {
-	return &Conn{
+type Option func(*Conn)
+
+func CloseFn(fn func()) Option {
+	return func(c *Conn) {
+		c.closeFn = fn
+	}
+}
+
+func Udp() Option {
+	return func(c *Conn) {
+		c.udp = true
+	}
+}
+
+func newConn(c gnet.Conn, ctx *socket.ConnContext, o ...Option) *Conn {
+	s := &Conn{
 		fd:          c.Fd(),
 		connContext: ctx,
 		raw:         c,
+		remoteAddr:  c.RemoteAddr(),
+		localAddr:   c.LocalAddr(),
 	}
+	for _, opt := range o {
+		opt(s)
+	}
+	return s
 }
 
 func (c *Conn) Fd() int {
@@ -63,6 +87,31 @@ func (c *Conn) Write(b []byte) error {
 	if c.connContext.Upgraded() {
 		return wsutil.WriteServerText(c.raw, b)
 	}
+	if c.udp {
+		if c.raw != nil && c.raw.RemoteAddr() != nil {
+			_, err := c.raw.Write(b)
+			return err
+		} else {
+			var addr string
+
+			if v, ok := c.connContext.GetOptional("remote_addr"); ok {
+				addr = v.(string)
+			} else {
+				addr = c.remoteAddr.String()
+			}
+			udpAddr, err := net.ResolveUDPAddr("udp", addr)
+			if err != nil {
+				return errors.New("invalid remote addr," + err.Error())
+			}
+			udpConn, err := net.DialUDP("udp", nil, udpAddr)
+			if err != nil {
+				return errors.New("new remote conn failed," + err.Error())
+			}
+			defer udpConn.Close()
+			_, err = udpConn.Write(b)
+			return err
+		}
+	}
 	_, err := c.raw.Write(b)
 	return err
 }
@@ -71,12 +120,15 @@ func (c *Conn) Close() {
 	if c.raw != nil {
 		_ = c.raw.Close()
 	}
+	if c.closeFn != nil {
+		c.closeFn()
+	}
 }
 
 func (c *Conn) LocalAddr() net.Addr {
-	return c.raw.LocalAddr()
+	return c.localAddr
 }
 
 func (c *Conn) RemoteAddr() net.Addr {
-	return c.raw.RemoteAddr()
+	return c.remoteAddr
 }
