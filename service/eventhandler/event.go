@@ -258,11 +258,13 @@ func (e *Event) handleMessage(c socket.Conn, rqId string, packedPkg []byte) (rqA
 	// Decode the action
 	gwPkg, acErr := e.actionDecode(c, decryptedData)
 	if acErr != nil {
-		err = errors.New("action decode failed, err=" + acErr.Error())
-		if respPackage, err1 = e.packGatewayError(c, gatewayv1.GatewayError_ActionErr, 0); err1 != nil {
-			err = errors.New(err.Error() + ":" + err1.Error())
-		}
-		return
+		e.log(c, rqId, "decode pkg failed, used with raw action 1, err="+acErr.Error(), zapcore.WarnLevel)
+		//err = errors.New("action decode failed, err=" + acErr.Error())
+		//if respPackage, err1 = e.packGatewayError(c, gatewayv1.GatewayError_ActionErr, 0); err1 != nil {
+		//	err = errors.New(err.Error() + ":" + err1.Error())
+		//}
+		//return
+		gwPkg = &codec.PKG{Action: 1, Data: decryptedData} // 原始数据action
 	}
 	rqData = gwPkg.Data
 
@@ -344,7 +346,7 @@ func (e *Event) RegisterAuthenticate(name string, provider AuthenticateProvider)
 	e.authProviders[name] = provider
 }
 
-// 类型@标识@类型:{key 时间戳}
+// 类型@标识@类型::{key 时间戳}
 func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, response string, initPackage []byte, err error) {
 	if !e.CryptoKeyInitialized(c) {
 		// 处理proxy
@@ -353,6 +355,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		}
 
 		hit = true
+		var notAuthenticatePackage bool
 		var authentication *socket.Authentication
 		codeType := codec.Proto
 		if bytes.Contains(pkg, []byte("::")) {
@@ -376,6 +379,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		} else {
 			authentication = &socket.Authentication{Type: "user", Id: ""}
 			codeType = codec.Json
+			notAuthenticatePackage = true
 		}
 
 		var keys []byte
@@ -416,6 +420,10 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		} else {
 			key = []byte("")
 			response = "000"
+			if notAuthenticatePackage {
+				hit = false
+				initPackage = pkg
+			}
 		}
 
 		e.log(c, rqId, utils.ToStr("authenticate type=", authentication.Type, "authenticate id=", authentication.Id), zapcore.InfoLevel)

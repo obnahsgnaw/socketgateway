@@ -43,7 +43,14 @@ func (e *Engine) OnOpen(c gnet.Conn) (out []byte, action gnet.Action) {
 		connCtx.SetOptional("wsCodec", new(wsCodec))
 	}
 	c.SetContext(connCtx)
-	c1 := newConn(c, connCtx)
+	var c1 *Conn
+	if e.server.Type().IsUdp() {
+		c1 = newConn(c, connCtx, Udp(), CloseFn(func() {
+			e.OnClose(c, nil)
+		}))
+	} else {
+		c1 = newConn(c, connCtx)
+	}
 	e.connections.Store(c.Fd(), c1)
 	e.event.OnOpen(e.server, c1)
 	return
@@ -56,16 +63,17 @@ func (e *Engine) OnClose(c gnet.Conn, err error) (action gnet.Action) {
 }
 
 func (e *Engine) OnTraffic(c gnet.Conn) (action gnet.Action) {
-	var c2 *Conn
-
-	if e.server.Type().IsUdp() {
-		connCtx := socket.NewContext()
-		c.SetContext(connCtx)
-		c2 = newConn(c, connCtx)
-	} else {
-		c1, _ := e.connections.Load(c.Fd())
-		c2 = c1.(*Conn)
+	if e.server.Type().IsUdp() { // udp 不触发 open 和 close
+		if v, ok := e.connections.Load(c.Fd()); !ok {
+			e.OnOpen(c)
+		} else {
+			vv := v.(*Conn)
+			vv.raw = c // 替换conn 要不然读取不到udp内容
+		}
 	}
+	c1, _ := e.connections.Load(c.Fd())
+	c2 := c1.(*Conn)
+
 	c2.Context().Active()
 	if e.ws {
 		wcc, _ := c2.connContext.GetOptional("wsCodec")
