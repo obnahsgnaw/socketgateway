@@ -75,7 +75,9 @@ func (s *Server) Init() error {
 		fd := s.fdProvider()
 		c := newWssConn(int(fd), conn, socket.NewContext())
 		s.onConnect(c)
-		s.handConn(c)
+		if !c.closed {
+			s.handConn(c)
+		}
 	})
 
 	return nil

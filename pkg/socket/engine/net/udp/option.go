@@ -12,6 +12,22 @@ func FdProvider(f func() int64) Option {
 	}
 }
 
+func Open(f func(conn socket.Conn)) Option {
+	return func(s *Server) {
+		if f != nil {
+			s.onConnect = f
+		}
+	}
+}
+
+func Close(f func(conn socket.Conn, err error)) Option {
+	return func(s *Server) {
+		if f != nil {
+			s.onDisconnect = f
+		}
+	}
+}
+
 func Message(f func(conn socket.Conn)) Option {
 	return func(s *Server) {
 		if f != nil {

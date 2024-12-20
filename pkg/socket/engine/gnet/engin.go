@@ -71,7 +71,10 @@ func (e *Engine) OnTraffic(c gnet.Conn) (action gnet.Action) {
 			vv.raw = c // 替换conn 要不然读取不到udp内容
 		}
 	}
-	c1, _ := e.connections.Load(c.Fd())
+	c1, ok := e.connections.Load(c.Fd())
+	if !ok { // udp时 可能open被权限阻断
+		return
+	}
 	c2 := c1.(*Conn)
 
 	c2.Context().Active()

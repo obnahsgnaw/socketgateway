@@ -13,6 +13,7 @@ type Conn struct {
 	connContext *socket.ConnContext
 	raw         net.Conn
 	pkg         [][]byte
+	closed      bool
 }
 
 func newConn(fd int, c net.Conn, ctx *socket.ConnContext) *Conn {
@@ -49,6 +50,7 @@ func (c *Conn) Close() {
 	if c.raw != nil {
 		_ = c.raw.Close()
 	}
+	c.closed = true
 }
 
 func (c *Conn) LocalAddr() net.Addr {

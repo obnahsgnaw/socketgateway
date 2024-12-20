@@ -67,13 +67,13 @@ func (s *Server) Init() error {
 }
 
 func (s *Server) Run(ctx context.Context) {
+	var data = make([]byte, 1024*4)
 	for {
 		select {
 		case <-ctx.Done():
 			break
 		default:
-			var data [1024]byte
-			n, addr, err := s.l.ReadFromUDP(data[:])
+			n, addr, err := s.l.ReadFromUDP(data)
 			if err == nil && n > 0 {
 				var fd int64
 				var ok bool
@@ -85,6 +85,9 @@ func (s *Server) Run(ctx context.Context) {
 				})
 				if !ok {
 					s.onConnect(c)
+					if c.closed { // 可能被连接中断
+						break
+					}
 				}
 				c.pkg = append(c.pkg, data[:n])
 				c.Context().Active()
