@@ -63,7 +63,9 @@ func (s *Server) Run(ctx context.Context) {
 				fd := s.fdProvider()
 				c := newConn(int(fd), conn, socket.NewContext())
 				s.onConnect(c)
-				go s.handConn(c)
+				if !c.closed {
+					go s.handConn(c)
+				}
 			}
 		}
 	}

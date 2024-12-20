@@ -15,6 +15,7 @@ type Conn struct {
 	pkg         [][]byte
 	closeCb     func(addr *net.UDPAddr)
 	l           sync.Mutex
+	closed      bool
 }
 
 func newWssConn(fd int, c *websocket.Conn, ctx *socket.ConnContext) *Conn {
@@ -52,6 +53,7 @@ func (c *Conn) Close() {
 	if c.raw != nil {
 		_ = c.raw.Close()
 	}
+	c.closed = true
 }
 
 func (c *Conn) LocalAddr() net.Addr {

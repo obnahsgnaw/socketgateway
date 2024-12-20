@@ -18,6 +18,12 @@ func newUdpEngineHandler(e *Engine, network string, port int) *udpEngineHandler 
 			atomic.AddInt64(&e.index, 1)
 			return atomic.LoadInt64(&e.index)
 		}),
+		udp.Open(func(c socket.Conn) {
+			e.event.OnOpen(e.server, c)
+		}),
+		udp.Close(func(c socket.Conn, err error) {
+			e.event.OnClose(e.server, c, err)
+		}),
 		udp.Message(func(c socket.Conn) {
 			e.event.OnTraffic(e.server, c)
 		}),

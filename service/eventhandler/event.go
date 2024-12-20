@@ -140,6 +140,10 @@ func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
 }
 
 func (e *Event) OnClose(s *socket.Server, c socket.Conn, err error) {
+	go e.handleClose(s, c, err)
+}
+
+func (e *Event) handleClose(s *socket.Server, c socket.Conn, err error) {
 	defer utils.RecoverHandler("on close", func(err, stack string) {
 		if e.logger != nil {
 			e.logger.Error("on close err=" + err + ", stack=" + stack)
@@ -178,6 +182,10 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		return
 	}
 
+	go e.handleTraffic(c, rqId, rawPkg)
+}
+
+func (e *Event) handleTraffic(c socket.Conn, rqId string, rawPkg []byte) {
 	// Initialize the encryption and decryption key
 	keyHit, secResponse, initPackage, secErr := e.authenticate(c, rqId, rawPkg)
 	if keyHit {
@@ -194,7 +202,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	}
 
 	// Unpacking a protocol package
-	err = e.codecDecode(c, initPackage, func(packedPkg []byte) {
+	err := e.codecDecode(c, initPackage, func(packedPkg []byte) {
 		e.log(c, rqId, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
 		rqAction, respAction, rqData, respData, respPackage, err1 := e.handleMessage(c, rqId, packedPkg)
 		if err1 != nil {

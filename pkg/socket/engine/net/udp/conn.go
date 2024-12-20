@@ -15,6 +15,7 @@ type Conn struct {
 	closeCb     func(addr *net.UDPAddr)
 	localAddr   *net.UDPAddr
 	remoteAddr  *net.UDPAddr
+	closed      bool
 }
 
 func newConn(fd int, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(udpAddr *net.UDPAddr)) *Conn {
@@ -76,6 +77,7 @@ func (c *Conn) Close() {
 	if c.closeCb != nil {
 		c.closeCb(c.addr)
 	}
+	c.closed = true
 }
 
 func (c *Conn) LocalAddr() net.Addr {
