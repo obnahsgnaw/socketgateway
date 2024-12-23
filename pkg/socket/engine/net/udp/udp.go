@@ -78,7 +78,8 @@ func (s *Server) Run(ctx context.Context) {
 				var fd int64
 				var ok bool
 				if fd, ok = s.clients[addr.String()]; !ok {
-					s.clients[addr.String()] = s.fdProvider()
+					fd = s.fdProvider()
+					s.clients[addr.String()] = fd
 				}
 				c := newConn(int(fd), s.l, s.localAddr, addr, socket.NewContext(), func(udpAddr *net.UDPAddr) {
 					delete(s.clients, udpAddr.String())

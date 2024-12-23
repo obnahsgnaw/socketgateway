@@ -88,17 +88,8 @@ func (c *Conn) Write(b []byte) error {
 		return wsutil.WriteServerText(c.raw, b)
 	}
 	if c.udp {
-		if c.raw != nil && c.raw.RemoteAddr() != nil {
-			_, err := c.raw.Write(b)
-			return err
-		} else {
-			var addr string
-
-			if v, ok := c.connContext.GetOptional("remote_addr"); ok {
-				addr = v.(string)
-			} else {
-				addr = c.remoteAddr.String()
-			}
+		if v, ok := c.connContext.GetOptional("remote_addr"); ok {
+			addr := v.(string)
 			udpAddr, err := net.ResolveUDPAddr("udp", addr)
 			if err != nil {
 				return errors.New("invalid remote addr," + err.Error())
@@ -108,7 +99,13 @@ func (c *Conn) Write(b []byte) error {
 				return errors.New("new remote conn failed," + err.Error())
 			}
 			defer udpConn.Close()
+
 			_, err = udpConn.Write(b)
+
+			return err
+		} else {
+			_, err := c.raw.Write(b)
+
 			return err
 		}
 	}
