@@ -10,7 +10,6 @@ type Conn struct {
 	fd          int
 	connContext *socket.ConnContext
 	raw         *net.UDPConn
-	addr        *net.UDPAddr
 	pkg         [][]byte
 	closeCb     func(addr *net.UDPAddr)
 	localAddr   *net.UDPAddr
@@ -48,34 +47,25 @@ func (c *Conn) Read() ([]byte, error) {
 }
 
 func (c *Conn) Write(b []byte) error {
-	if c.raw != nil && c.raw.RemoteAddr() != nil {
-		_, err := c.raw.WriteToUDP(b, c.addr)
-		return err
-	} else {
-		var addr string
+	var addr string
 
-		if v, ok := c.connContext.GetOptional("remote_addr"); ok {
-			addr = v.(string)
-		} else {
-			addr = c.remoteAddr.String()
-		}
-		udpAddr, err := net.ResolveUDPAddr("udp", addr)
-		if err != nil {
-			return errors.New("invalid remote addr," + err.Error())
-		}
-		udpConn, err := net.DialUDP("udp", nil, udpAddr)
-		if err != nil {
-			return errors.New("new remote conn failed," + err.Error())
-		}
-		defer udpConn.Close()
-		_, err = udpConn.Write(b)
-		return err
+	if v, ok := c.connContext.GetOptional("remote_addr"); ok {
+		addr = v.(string)
+	} else {
+		addr = c.remoteAddr.String()
 	}
+	udpAddr, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return errors.New("invalid remote addr," + err.Error())
+	}
+
+	_, err = c.raw.WriteToUDP(b, udpAddr)
+	return err
 }
 
 func (c *Conn) Close() {
 	if c.closeCb != nil {
-		c.closeCb(c.addr)
+		c.closeCb(c.remoteAddr)
 	}
 	c.closed = true
 }
