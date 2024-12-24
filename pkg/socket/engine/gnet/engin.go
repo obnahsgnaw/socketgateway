@@ -57,8 +57,10 @@ func (e *Engine) OnOpen(c gnet.Conn) (out []byte, action gnet.Action) {
 }
 
 func (e *Engine) OnClose(c gnet.Conn, err error) (action gnet.Action) {
-	c1, _ := e.connections.LoadAndDelete(c.Fd())
-	e.event.OnClose(e.server, c1.(*Conn), err)
+	c1, ok := e.connections.LoadAndDelete(c.Fd())
+	if ok {
+		e.event.OnClose(e.server, c1.(*Conn), err)
+	}
 	return
 }
 
