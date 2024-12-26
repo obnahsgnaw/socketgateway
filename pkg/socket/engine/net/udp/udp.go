@@ -5,6 +5,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"net"
 	"sync/atomic"
+	"syscall"
 )
 
 type Server struct {
@@ -18,6 +19,7 @@ type Server struct {
 	onConnect    func(conn socket.Conn)
 	onDisconnect func(conn socket.Conn, err error)
 	onMessage    func(conn socket.Conn)
+	broadcast    bool
 }
 
 func New(port int, o ...Option) *Server {
@@ -62,6 +64,11 @@ func (s *Server) Init() error {
 	if err != nil {
 		return err
 	}
+	if s.broadcast {
+		if err = listenBroadcast(l); err != nil {
+			return err
+		}
+	}
 	s.l = l
 	return nil
 }
@@ -96,4 +103,17 @@ func (s *Server) Run(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func listenBroadcast(conn *net.UDPConn) error {
+	// 获取文件描述符
+	f, err := conn.File()
+	if err != nil {
+		return err
+	}
+	fileDescriptor := f.Fd()
+
+	// 设置 socket 选项为广播模式 (SO_BROADCAST)
+	err = syscall.SetsockoptInt(int(fileDescriptor), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
+	return err
 }

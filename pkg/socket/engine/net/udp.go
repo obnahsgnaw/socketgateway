@@ -35,6 +35,10 @@ func newUdpEngineHandler(e *Engine, network string, port int) *udpEngineHandler 
 	}
 }
 
+func (h *udpEngineHandler) BroadcastMode() {
+	h.u.With(udp.Broadcast())
+}
+
 func (h *udpEngineHandler) Init() error {
 	return h.u.Init()
 }
