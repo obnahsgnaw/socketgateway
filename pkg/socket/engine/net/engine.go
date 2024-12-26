@@ -24,6 +24,7 @@ type Engine struct {
 	stopped      bool
 	t            sockettype.SocketType
 	udpBroadcast bool
+	idProvider   func([]byte) string
 }
 
 func New() *Engine {
@@ -48,6 +49,9 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 		udpHdr := newUdpEngineHandler(e, t.String(), port)
 		if e.udpBroadcast {
 			udpHdr.BroadcastMode()
+		}
+		if e.idProvider != nil {
+			udpHdr.IdentifyProvider(e.idProvider)
 		}
 		handler = udpHdr
 	} else if t.IsWss() {
@@ -87,6 +91,11 @@ func (e *Engine) Stop() error {
 
 func (e *Engine) UdpBroadcast() *Engine {
 	e.udpBroadcast = true
+	return e
+}
+
+func (e *Engine) UdpIdProvider(fn func([]byte) string) *Engine {
+	e.idProvider = fn
 	return e
 }
 
