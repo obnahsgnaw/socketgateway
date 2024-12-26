@@ -39,6 +39,10 @@ func (h *udpEngineHandler) BroadcastMode() {
 	h.u.With(udp.Broadcast())
 }
 
+func (h *udpEngineHandler) IdentifyProvider(fn func([]byte) string) {
+	h.u.With(udp.IdentifyProvider(fn))
+}
+
 func (h *udpEngineHandler) Init() error {
 	return h.u.Init()
 }

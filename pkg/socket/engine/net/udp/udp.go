@@ -9,17 +9,18 @@ import (
 )
 
 type Server struct {
-	l            *net.UDPConn
-	clients      map[string]int64
-	network      string
-	port         int
-	localAddr    *net.UDPAddr
-	fdProvider   func() int64
-	index        int64
-	onConnect    func(conn socket.Conn)
-	onDisconnect func(conn socket.Conn, err error)
-	onMessage    func(conn socket.Conn)
-	broadcast    bool
+	l                *net.UDPConn
+	clients          map[string]int64
+	network          string
+	port             int
+	localAddr        *net.UDPAddr
+	fdProvider       func() int64
+	index            int64
+	onConnect        func(conn socket.Conn)
+	onDisconnect     func(conn socket.Conn, err error)
+	onMessage        func(conn socket.Conn)
+	broadcast        bool
+	identifyProvider func([]byte) string
 }
 
 func New(port int, o ...Option) *Server {
@@ -84,12 +85,19 @@ func (s *Server) Run(ctx context.Context) {
 			if err == nil && n > 0 {
 				var fd int64
 				var ok bool
-				if fd, ok = s.clients[addr.String()]; !ok {
-					fd = s.fdProvider()
-					s.clients[addr.String()] = fd
+				var identify = addr.String()
+				if s.identifyProvider != nil {
+					identify = s.identifyProvider(data[:n])
+					if identify == "" {
+						identify = addr.String()
+					}
 				}
-				c := newConn(int(fd), s.l, s.localAddr, addr, socket.NewContext(), func(udpAddr *net.UDPAddr) {
-					delete(s.clients, udpAddr.String())
+				if fd, ok = s.clients[identify]; !ok {
+					fd = s.fdProvider()
+					s.clients[identify] = fd
+				}
+				c := newConn(int(fd), identify, s.l, s.localAddr, addr, socket.NewContext(), func(ide string) {
+					delete(s.clients, ide)
 				})
 				if !ok {
 					s.onConnect(c)

@@ -11,16 +11,18 @@ type Conn struct {
 	connContext *socket.ConnContext
 	raw         *net.UDPConn
 	pkg         [][]byte
-	closeCb     func(addr *net.UDPAddr)
+	closeCb     func(identify string)
 	localAddr   *net.UDPAddr
 	remoteAddr  *net.UDPAddr
 	closed      bool
+	identify    string
 }
 
-func newConn(fd int, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(udpAddr *net.UDPAddr)) *Conn {
+func newConn(fd int, identify string, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(identify string)) *Conn {
 	c.LocalAddr()
 	return &Conn{
 		fd:          fd,
+		identify:    identify,
 		connContext: ctx,
 		raw:         c,
 		localAddr:   localAddr,
@@ -65,7 +67,7 @@ func (c *Conn) Write(b []byte) error {
 
 func (c *Conn) Close() {
 	if c.closeCb != nil {
-		c.closeCb(c.remoteAddr)
+		c.closeCb(c.identify)
 	}
 	c.closed = true
 }

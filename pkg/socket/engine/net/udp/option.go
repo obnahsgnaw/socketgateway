@@ -49,3 +49,11 @@ func Broadcast() Option {
 		s.broadcast = true
 	}
 }
+
+func IdentifyProvider(fn func([]byte) string) Option {
+	return func(s *Server) {
+		if fn != nil {
+			s.identifyProvider = fn
+		}
+	}
+}
