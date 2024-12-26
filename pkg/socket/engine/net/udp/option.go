@@ -43,3 +43,9 @@ func Network(network string) Option {
 		}
 	}
 }
+
+func Broadcast() Option {
+	return func(s *Server) {
+		s.broadcast = true
+	}
+}

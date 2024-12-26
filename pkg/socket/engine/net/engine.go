@@ -14,15 +14,16 @@ import (
 
 // Engine 封装上层的事件处理 转发给eventHandler
 type Engine struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
-	addr        string
-	event       socket.Event
-	server      *socket.Server
-	index       int64
-	connections sync.Map
-	stopped     bool
-	t           sockettype.SocketType
+	ctx          context.Context
+	cancel       context.CancelFunc
+	addr         string
+	event        socket.Event
+	server       *socket.Server
+	index        int64
+	connections  sync.Map
+	stopped      bool
+	t            sockettype.SocketType
+	udpBroadcast bool
 }
 
 func New() *Engine {
@@ -44,7 +45,11 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	if t.IsTcp() {
 		handler = newTcpEngineHandler(e, e.addr)
 	} else if t.IsUdp() {
-		handler = newUdpEngineHandler(e, t.String(), port)
+		udpHdr := newUdpEngineHandler(e, t.String(), port)
+		if e.udpBroadcast {
+			udpHdr.BroadcastMode()
+		}
+		handler = udpHdr
 	} else if t.IsWss() {
 		handler = newWssEngineHandler(e, port)
 	} else {
@@ -78,6 +83,11 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 func (e *Engine) Stop() error {
 	e.stopped = true
 	return nil
+}
+
+func (e *Engine) UdpBroadcast() *Engine {
+	e.udpBroadcast = true
+	return e
 }
 
 func parseProtoAddr(addr string) (network, address string) {
