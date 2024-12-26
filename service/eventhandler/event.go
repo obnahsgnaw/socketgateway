@@ -266,7 +266,6 @@ func (e *Event) handleMessage(c socket.Conn, rqId string, packedPkg []byte) (rqA
 	// Decode the action
 	gwPkg, acErr := e.actionDecode(c, decryptedData)
 	if acErr != nil {
-		e.log(c, rqId, "decode pkg failed, used with raw action 1, err="+acErr.Error(), zapcore.WarnLevel)
 		err = errors.New("action decode failed, err=" + acErr.Error())
 		if respPackage, err1 = e.packGatewayError(c, gatewayv1.GatewayError_ActionErr, 0); err1 != nil {
 			err = errors.New(err.Error() + ":" + err1.Error())
