@@ -89,8 +89,9 @@ func (s *Server) Run(ctx context.Context) {
 				var fd int64
 				var ok bool
 				var identify = addr.String()
+				pkg := data[:n]
 				if s.identifyProvider != nil {
-					identify = s.identifyProvider(data[:n])
+					identify = s.identifyProvider(pkg)
 					if identify == "" {
 						identify = addr.String()
 					}
@@ -101,16 +102,21 @@ func (s *Server) Run(ctx context.Context) {
 				}
 				c := newConn(int(fd), identify, s.broadcastAddr, s.l, s.localAddr, addr, socket.NewContext(), func(ide string) {
 					delete(s.clients, ide)
-				}, s.readInterceptor, s.writeInterceptor)
+				}, s.writeInterceptor)
 				if !ok {
 					s.onConnect(c)
 					if c.closed { // 可能被连接中断
 						break
 					}
 				}
-				c.pkg = append(c.pkg, data[:n])
-				c.Context().Active()
-				s.onMessage(c)
+				if s.readInterceptor != nil {
+					pkg = s.readInterceptor(c, pkg)
+				}
+				if len(pkg) > 0 {
+					c.pkg = append(c.pkg, pkg)
+					c.Context().Active()
+					s.onMessage(c)
+				}
 			}
 		}
 	}
