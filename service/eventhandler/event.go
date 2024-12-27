@@ -49,6 +49,7 @@ type Event struct {
 	secTtl        int64 // second
 	ss            *socket.Server
 	authProviders map[string]AuthenticateProvider
+	defDataType   codec.Name
 }
 
 // AuthenticateProvider 返回user即相当于做了用户认证
@@ -69,6 +70,7 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 		secEncoder:    coder.B64StdEncoding,
 		secTtl:        60,
 		authProviders: make(map[string]AuthenticateProvider),
+		defDataType:   codec.Json,
 	}
 	toData := func(p *codec.PKG) codec.DataPtr {
 		if p == nil {
@@ -384,7 +386,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			}
 		} else {
 			authentication = &socket.Authentication{Type: "user", Id: ""}
-			codeType = codec.Json
+			codeType = e.defDataType
 			notAuthenticatePackage = true
 		}
 

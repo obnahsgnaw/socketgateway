@@ -137,6 +137,11 @@ func Interceptor(i func() error) Option {
 		s.addEventOption(eventhandler.Interceptor(i))
 	}
 }
+func DefaultDataType(name codec.Name) Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.DefaultDataType(name))
+	}
+}
 
 func Engine(e socket.Engine) Option {
 	return func(s *Server) {
