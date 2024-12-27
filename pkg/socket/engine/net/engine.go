@@ -14,17 +14,18 @@ import (
 
 // Engine 封装上层的事件处理 转发给eventHandler
 type Engine struct {
-	ctx          context.Context
-	cancel       context.CancelFunc
-	addr         string
-	event        socket.Event
-	server       *socket.Server
-	index        int64
-	connections  sync.Map
-	stopped      bool
-	t            sockettype.SocketType
-	udpBroadcast bool
-	idProvider   func([]byte) string
+	ctx              context.Context
+	cancel           context.CancelFunc
+	addr             string
+	event            socket.Event
+	server           *socket.Server
+	index            int64
+	connections      sync.Map
+	stopped          bool
+	t                sockettype.SocketType
+	udpBroadcast     bool
+	udpBroadcastAddr string
+	idProvider       func([]byte) string
 }
 
 func New() *Engine {
@@ -48,7 +49,7 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 	} else if t.IsUdp() {
 		udpHdr := newUdpEngineHandler(e, t.String(), port)
 		if e.udpBroadcast {
-			udpHdr.BroadcastMode()
+			udpHdr.BroadcastMode(e.udpBroadcastAddr)
 		}
 		if e.idProvider != nil {
 			udpHdr.IdentifyProvider(e.idProvider)
@@ -89,8 +90,9 @@ func (e *Engine) Stop() error {
 	return nil
 }
 
-func (e *Engine) UdpBroadcast() *Engine {
+func (e *Engine) UdpBroadcast(sendAddr string) *Engine {
 	e.udpBroadcast = true
+	e.udpBroadcastAddr = sendAddr
 	return e
 }
 

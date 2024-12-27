@@ -7,27 +7,29 @@ import (
 )
 
 type Conn struct {
-	fd          int
-	connContext *socket.ConnContext
-	raw         *net.UDPConn
-	pkg         [][]byte
-	closeCb     func(identify string)
-	localAddr   *net.UDPAddr
-	remoteAddr  *net.UDPAddr
-	closed      bool
-	identify    string
+	fd            int
+	connContext   *socket.ConnContext
+	raw           *net.UDPConn
+	pkg           [][]byte
+	closeCb       func(identify string)
+	localAddr     *net.UDPAddr
+	remoteAddr    *net.UDPAddr
+	closed        bool
+	identify      string
+	broadcastAddr string
 }
 
-func newConn(fd int, identify string, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(identify string)) *Conn {
+func newConn(fd int, identify, broadcastAddr string, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(identify string)) *Conn {
 	c.LocalAddr()
 	return &Conn{
-		fd:          fd,
-		identify:    identify,
-		connContext: ctx,
-		raw:         c,
-		localAddr:   localAddr,
-		remoteAddr:  remoteAddr,
-		closeCb:     closeCb,
+		fd:            fd,
+		identify:      identify,
+		broadcastAddr: broadcastAddr,
+		connContext:   ctx,
+		raw:           c,
+		localAddr:     localAddr,
+		remoteAddr:    remoteAddr,
+		closeCb:       closeCb,
 	}
 }
 
@@ -50,18 +52,27 @@ func (c *Conn) Read() ([]byte, error) {
 
 func (c *Conn) Write(b []byte) error {
 	var addr string
-
-	if v, ok := c.connContext.GetOptional("remote_addr"); ok {
-		addr = v.(string)
+	if c.broadcastAddr != "" {
+		addr = c.broadcastAddr
 	} else {
-		addr = c.remoteAddr.String()
+		if v, ok := c.connContext.GetOptional("remote_addr"); ok {
+			addr = v.(string)
+		}
 	}
-	udpAddr, err := net.ResolveUDPAddr("udp", addr)
-	if err != nil {
-		return errors.New("invalid remote addr," + err.Error())
+	if addr != "" {
+		udpAddr, err := net.ResolveUDPAddr("udp", addr)
+		if err != nil {
+			return errors.New("invalid remote addr," + err.Error())
+		}
+		conn, err1 := net.DialUDP("udp", nil, udpAddr)
+		if err1 != nil {
+			return errors.New("dial udp failed," + err1.Error())
+		}
+		_, err = conn.Write(b)
+		return err
 	}
 
-	_, err = c.raw.WriteToUDP(b, udpAddr)
+	_, err := c.raw.WriteToUDP(b, c.remoteAddr)
 	return err
 }
 

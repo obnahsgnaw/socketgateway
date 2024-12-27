@@ -20,6 +20,7 @@ type Server struct {
 	onDisconnect     func(conn socket.Conn, err error)
 	onMessage        func(conn socket.Conn)
 	broadcast        bool
+	broadcastAddr    string
 	identifyProvider func([]byte) string
 }
 
@@ -96,7 +97,7 @@ func (s *Server) Run(ctx context.Context) {
 					fd = s.fdProvider()
 					s.clients[identify] = fd
 				}
-				c := newConn(int(fd), identify, s.l, s.localAddr, addr, socket.NewContext(), func(ide string) {
+				c := newConn(int(fd), identify, s.broadcastAddr, s.l, s.localAddr, addr, socket.NewContext(), func(ide string) {
 					delete(s.clients, ide)
 				})
 				if !ok {
