@@ -17,11 +17,10 @@ type Conn struct {
 	closed           bool
 	identify         string
 	broadcastAddr    string
-	readInterceptor  func(conn *Conn, data []byte) []byte
 	writeInterceptor func(conn *Conn, data []byte) []byte
 }
 
-func newConn(fd int, identify, broadcastAddr string, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(identify string), readInterceptor, writeInterceptor func(conn *Conn, data []byte) []byte) *Conn {
+func newConn(fd int, identify, broadcastAddr string, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(identify string), writeInterceptor func(conn *Conn, data []byte) []byte) *Conn {
 	return &Conn{
 		fd:               fd,
 		identify:         identify,
@@ -31,7 +30,6 @@ func newConn(fd int, identify, broadcastAddr string, c *net.UDPConn, localAddr, 
 		localAddr:        localAddr,
 		remoteAddr:       remoteAddr,
 		closeCb:          closeCb,
-		readInterceptor:  readInterceptor,
 		writeInterceptor: writeInterceptor,
 	}
 }
@@ -54,6 +52,12 @@ func (c *Conn) Read() ([]byte, error) {
 }
 
 func (c *Conn) Write(b []byte) error {
+	if c.writeInterceptor != nil {
+		b = c.writeInterceptor(c, b)
+		if len(b) == 0 {
+			return nil
+		}
+	}
 	var addr string
 	if c.broadcastAddr != "" {
 		addr = c.broadcastAddr
