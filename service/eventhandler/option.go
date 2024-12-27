@@ -120,3 +120,9 @@ func Interceptor(i func() error) Option {
 		event.interceptor = i
 	}
 }
+
+func DefaultDataType(name codec.Name) Option {
+	return func(event *Event) {
+		event.defDataType = name
+	}
+}

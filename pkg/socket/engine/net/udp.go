@@ -44,6 +44,14 @@ func (h *udpEngineHandler) IdentifyProvider(fn func([]byte) string) {
 	h.u.With(udp.IdentifyProvider(fn))
 }
 
+func (h *udpEngineHandler) ReadInterceptor(fn func(*udp.Conn, []byte) []byte) {
+	h.u.With(udp.ReadInterceptor(fn))
+}
+
+func (h *udpEngineHandler) WriteInterceptor(fn func(*udp.Conn, []byte) []byte) {
+	h.u.With(udp.WriteInterceptor(fn))
+}
+
 func (h *udpEngineHandler) Init() error {
 	return h.u.Init()
 }

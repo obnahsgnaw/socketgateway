@@ -7,29 +7,32 @@ import (
 )
 
 type Conn struct {
-	fd            int
-	connContext   *socket.ConnContext
-	raw           *net.UDPConn
-	pkg           [][]byte
-	closeCb       func(identify string)
-	localAddr     *net.UDPAddr
-	remoteAddr    *net.UDPAddr
-	closed        bool
-	identify      string
-	broadcastAddr string
+	fd               int
+	connContext      *socket.ConnContext
+	raw              *net.UDPConn
+	pkg              [][]byte
+	closeCb          func(identify string)
+	localAddr        *net.UDPAddr
+	remoteAddr       *net.UDPAddr
+	closed           bool
+	identify         string
+	broadcastAddr    string
+	readInterceptor  func(conn *Conn, data []byte) []byte
+	writeInterceptor func(conn *Conn, data []byte) []byte
 }
 
-func newConn(fd int, identify, broadcastAddr string, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(identify string)) *Conn {
-	c.LocalAddr()
+func newConn(fd int, identify, broadcastAddr string, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(identify string), readInterceptor, writeInterceptor func(conn *Conn, data []byte) []byte) *Conn {
 	return &Conn{
-		fd:            fd,
-		identify:      identify,
-		broadcastAddr: broadcastAddr,
-		connContext:   ctx,
-		raw:           c,
-		localAddr:     localAddr,
-		remoteAddr:    remoteAddr,
-		closeCb:       closeCb,
+		fd:               fd,
+		identify:         identify,
+		broadcastAddr:    broadcastAddr,
+		connContext:      ctx,
+		raw:              c,
+		localAddr:        localAddr,
+		remoteAddr:       remoteAddr,
+		closeCb:          closeCb,
+		readInterceptor:  readInterceptor,
+		writeInterceptor: writeInterceptor,
 	}
 }
 
@@ -89,4 +92,8 @@ func (c *Conn) LocalAddr() net.Addr {
 
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.remoteAddr
+}
+
+func (c *Conn) Identify() string {
+	return c.identify
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net/udp"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"strconv"
 	"strings"
@@ -26,6 +27,8 @@ type Engine struct {
 	udpBroadcast     bool
 	udpBroadcastAddr string
 	idProvider       func([]byte) string
+	readInterceptor  func(conn *udp.Conn, data []byte) []byte
+	writeInterceptor func(conn *udp.Conn, data []byte) []byte
 }
 
 func New() *Engine {
@@ -99,6 +102,14 @@ func (e *Engine) UdpBroadcast(sendAddr string) *Engine {
 func (e *Engine) UdpIdProvider(fn func([]byte) string) *Engine {
 	e.idProvider = fn
 	return e
+}
+
+func (e *Engine) ReadInterceptor(fn func(*udp.Conn, []byte) []byte) {
+	e.readInterceptor = fn
+}
+
+func (e *Engine) WriteInterceptor(fn func(*udp.Conn, []byte) []byte) {
+	e.writeInterceptor = fn
 }
 
 func parseProtoAddr(addr string) (network, address string) {

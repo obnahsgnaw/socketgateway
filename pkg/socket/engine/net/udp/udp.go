@@ -22,6 +22,8 @@ type Server struct {
 	broadcast        bool
 	broadcastAddr    string
 	identifyProvider func([]byte) string
+	readInterceptor  func(conn *Conn, data []byte) []byte
+	writeInterceptor func(conn *Conn, data []byte) []byte
 }
 
 func New(port int, o ...Option) *Server {
@@ -99,7 +101,7 @@ func (s *Server) Run(ctx context.Context) {
 				}
 				c := newConn(int(fd), identify, s.broadcastAddr, s.l, s.localAddr, addr, socket.NewContext(), func(ide string) {
 					delete(s.clients, ide)
-				})
+				}, s.readInterceptor, s.writeInterceptor)
 				if !ok {
 					s.onConnect(c)
 					if c.closed { // 可能被连接中断
