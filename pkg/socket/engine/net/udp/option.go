@@ -50,6 +50,12 @@ func Broadcast() Option {
 	}
 }
 
+func BroadcastAddr(addr string) Option {
+	return func(s *Server) {
+		s.broadcastAddr = addr
+	}
+}
+
 func IdentifyProvider(fn func([]byte) string) Option {
 	return func(s *Server) {
 		if fn != nil {
