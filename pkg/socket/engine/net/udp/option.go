@@ -64,18 +64,8 @@ func IdentifyProvider(fn func([]byte) string) Option {
 	}
 }
 
-func ReadInterceptor(fn func(*Conn, []byte) []byte) Option {
+func BodyMax(max int) Option {
 	return func(s *Server) {
-		if fn != nil {
-			s.readInterceptor = fn
-		}
-	}
-}
-
-func WriteInterceptor(fn func(*Conn, []byte) []byte) Option {
-	return func(s *Server) {
-		if fn != nil {
-			s.writeInterceptor = fn
-		}
+		s.bodyMax = max
 	}
 }

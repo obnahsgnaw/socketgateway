@@ -36,19 +36,15 @@ func (m *ProxyManager) Remove(c *moc.Conn) {
 	m.connections.Delete(c.Id())
 }
 
-func (e *Event) ProxyInit(c *moc.Conn, coderName codec.Name, packedPkg []byte) (respPackage []byte, err error) {
-	// Handle user login information
-	if e.interceptor != nil {
-		if err = e.interceptor(); err != nil {
-			return
-		}
+func (e *Event) ProxyInit(c *moc.Conn, _ codec.Name, packedPkg []byte) (respPackage []byte, err error) {
+	if err = e.openIntercept(); err != nil {
+		return
 	}
 	pm.Remove(c)
 	c = pm.Sync(c)
 	e.ClearCoder(c)
 	e.ClearCryptoKey(c)
 	c.Context().Authenticate(nil)
-	// Initialize the encryption and decryption key pair
 	_, response, _, keyErr := e.authenticate(c, "", packedPkg)
 	respPackage = []byte(response)
 	if keyErr != nil {
@@ -59,10 +55,8 @@ func (e *Event) ProxyInit(c *moc.Conn, coderName codec.Name, packedPkg []byte) (
 
 // Proxy The proxy forwards other requests to handler (client -> Forwarding adapter -> Proxy)
 func (e *Event) Proxy(c *moc.Conn, rqId string, packedPkg []byte) (rqAction, respAction codec.Action, rqData, respData, respPackage []byte, err error) {
-	if e.interceptor != nil {
-		if err = e.interceptor(); err != nil {
-			return
-		}
+	if err = e.openIntercept(); err != nil {
+		return
 	}
 	c = pm.Sync(c)
 	// Codec initialization

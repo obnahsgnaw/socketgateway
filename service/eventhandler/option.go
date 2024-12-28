@@ -117,7 +117,7 @@ func Ticker(name string, ticker TickHandler) Option {
 
 func Interceptor(i func() error) Option {
 	return func(event *Event) {
-		event.interceptor = i
+		event.openInterceptor = i
 	}
 }
 

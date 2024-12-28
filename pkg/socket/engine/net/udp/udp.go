@@ -22,8 +22,7 @@ type Server struct {
 	broadcast        bool
 	broadcastAddr    string
 	identifyProvider func([]byte) string
-	readInterceptor  func(conn *Conn, data []byte) []byte
-	writeInterceptor func(conn *Conn, data []byte) []byte
+	bodyMax          int
 }
 
 func New(port int, o ...Option) *Server {
@@ -32,6 +31,7 @@ func New(port int, o ...Option) *Server {
 		clients: make(map[string]int64),
 		network: "udp",
 		port:    port,
+		bodyMax: 1024,
 	}
 	s.fdProvider = func() int64 {
 		atomic.AddInt64(&s.index, 1)
@@ -78,7 +78,7 @@ func (s *Server) Init() error {
 }
 
 func (s *Server) Run(ctx context.Context) {
-	var data = make([]byte, 1024*4)
+	var data = make([]byte, s.bodyMax)
 	for {
 		select {
 		case <-ctx.Done():
@@ -102,21 +102,16 @@ func (s *Server) Run(ctx context.Context) {
 				}
 				c := newConn(int(fd), identify, s.broadcastAddr, s.l, s.localAddr, addr, socket.NewContext(), func(ide string) {
 					delete(s.clients, ide)
-				}, s.writeInterceptor)
+				})
 				if !ok {
 					s.onConnect(c)
 					if c.closed { // 可能被连接中断
 						break
 					}
 				}
-				if s.readInterceptor != nil {
-					pkg = s.readInterceptor(c, pkg)
-				}
-				if len(pkg) > 0 {
-					c.pkg = append(c.pkg, pkg)
-					c.Context().Active()
-					s.onMessage(c)
-				}
+				c.pkg = append(c.pkg, pkg)
+				c.Context().Active()
+				s.onMessage(c)
 			}
 		}
 	}

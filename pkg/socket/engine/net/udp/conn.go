@@ -7,30 +7,28 @@ import (
 )
 
 type Conn struct {
-	fd               int
-	connContext      *socket.ConnContext
-	raw              *net.UDPConn
-	pkg              [][]byte
-	closeCb          func(identify string)
-	localAddr        *net.UDPAddr
-	remoteAddr       *net.UDPAddr
-	closed           bool
-	identify         string
-	broadcastAddr    string
-	writeInterceptor func(conn *Conn, data []byte) []byte
+	fd            int
+	connContext   *socket.ConnContext
+	raw           *net.UDPConn
+	pkg           [][]byte
+	closeCb       func(identify string)
+	localAddr     *net.UDPAddr
+	remoteAddr    *net.UDPAddr
+	closed        bool
+	identify      string
+	broadcastAddr string
 }
 
-func newConn(fd int, identify, broadcastAddr string, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(identify string), writeInterceptor func(conn *Conn, data []byte) []byte) *Conn {
+func newConn(fd int, identify, broadcastAddr string, c *net.UDPConn, localAddr, remoteAddr *net.UDPAddr, ctx *socket.ConnContext, closeCb func(identify string)) *Conn {
 	return &Conn{
-		fd:               fd,
-		identify:         identify,
-		broadcastAddr:    broadcastAddr,
-		connContext:      ctx,
-		raw:              c,
-		localAddr:        localAddr,
-		remoteAddr:       remoteAddr,
-		closeCb:          closeCb,
-		writeInterceptor: writeInterceptor,
+		fd:            fd,
+		identify:      identify,
+		broadcastAddr: broadcastAddr,
+		connContext:   ctx,
+		raw:           c,
+		localAddr:     localAddr,
+		remoteAddr:    remoteAddr,
+		closeCb:       closeCb,
 	}
 }
 
@@ -52,12 +50,6 @@ func (c *Conn) Read() ([]byte, error) {
 }
 
 func (c *Conn) Write(b []byte) error {
-	if c.writeInterceptor != nil {
-		b = c.writeInterceptor(c, b)
-		if len(b) == 0 {
-			return nil
-		}
-	}
 	var addr string
 	if c.broadcastAddr != "" {
 		addr = c.broadcastAddr
