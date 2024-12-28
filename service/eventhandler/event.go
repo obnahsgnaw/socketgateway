@@ -39,7 +39,6 @@ type Event struct {
 	tickInterval  time.Duration
 	privateKey    []byte
 	defaultUser   *socket.AuthUser
-	interceptor   func() error
 	rsa           *rsautil.Rsa // 连接后第一包发送rsa加密 aes密钥@时间戳 交换密钥， 服务端 rsa解密得到aes 密钥， 后续使用其来解析aes cbc 加密的内容体， 内容体组成为：iv（16byte）+内容 (aes256 最小16字节) 一个内容最小32字节
 	es            *esutil.ADes
 	esTp          esutil.EsType
@@ -50,6 +49,10 @@ type Event struct {
 	ss            *socket.Server
 	authProviders map[string]AuthenticateProvider
 	defDataType   codec.Name
+
+	openInterceptor     func() error
+	receiveInterceptors []HandleFunc
+	sendInterceptors    []HandleFunc
 }
 
 // AuthenticateProvider 返回user即相当于做了用户认证
@@ -130,14 +133,13 @@ func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
 			e.logger.Error("on open err=" + err + ", stack=" + stack)
 		}
 	})
+
 	rqId := utils.GenLocalId("rq")
 	e.log(c, rqId, "Connected", zapcore.InfoLevel)
-	if e.interceptor != nil {
-		if err := e.interceptor(); err != nil {
-			e.log(c, "", "intercepted:"+err.Error(), zapcore.WarnLevel)
-			connutil.SetCloseReason(c, "close by interceptor: "+err.Error())
-			c.Close()
-		}
+	if err := e.openIntercept(); err != nil {
+		e.log(c, rqId, "open intercepted:"+err.Error(), zapcore.WarnLevel)
+		connutil.SetCloseReason(c, "close by interceptor: "+err.Error())
+		c.Close()
 	}
 }
 
@@ -151,6 +153,7 @@ func (e *Event) handleClose(s *socket.Server, c socket.Conn, err error) {
 			e.logger.Error("on close err=" + err + ", stack=" + stack)
 		}
 	})
+
 	reason := ""
 	if err != nil {
 		reason = err.Error()
@@ -217,7 +220,7 @@ func (e *Event) handleTraffic(c socket.Conn, rqId string, rawPkg []byte) {
 				e.log(c, rqId, err1.Error(), zapcore.ErrorLevel)
 			}
 		} else {
-			e.log(c, rqId, "handle success, but no response", zapcore.InfoLevel)
+			e.log(c, rqId, "no response", zapcore.InfoLevel)
 		}
 	})
 	if err != nil {
@@ -255,6 +258,10 @@ func (e *Event) OnShutdown(s *socket.Server) {
 // HandleMessage handle message
 func (e *Event) handleMessage(c socket.Conn, rqId string, packedPkg []byte) (rqAction, respAction codec.Action, rqData, respData, respPackage []byte, err error) {
 	var err1 error
+	if packedPkg, err1 = e.receiveIntercept(c, packedPkg); err1 != nil {
+		err = errors.New("package receive intercepted,err=" + err1.Error())
+		return
+	}
 	// Decrypt the packet
 	decryptedData, decErr := e.decrypt(c, packedPkg)
 	if decErr != nil {
@@ -354,7 +361,7 @@ func (e *Event) RegisterAuthenticate(name string, provider AuthenticateProvider)
 	e.authProviders[name] = provider
 }
 
-// 类型@标识@类型::{key 时间戳}
+// 类型@标识@数据类型::RSA{es-key+10位时间戳}
 func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, response string, initPackage []byte, err error) {
 	if !e.CryptoKeyInitialized(c) {
 		// 处理proxy
@@ -646,6 +653,10 @@ func (e *Event) gatewayErrorResponse(c socket.Conn, rqId string, errorStatus gat
 }
 
 func (e *Event) write(c socket.Conn, data []byte) (err error) {
+	if data, err = e.sendIntercept(c, data); err != nil {
+		e.log(c, "", "write failed, send intercepted err="+err.Error(), zapcore.ErrorLevel)
+		return err
+	}
 	if err = c.Write(data); err != nil {
 		err = utils.NewWrappedError("write failed", err)
 	}
@@ -674,7 +685,6 @@ func (e *Event) SendAction(c socket.Conn, a codec.Action, data codec.DataPtr) (e
 		e.log(c, "", "pack action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.Any("pkg", data))
 		return
 	}
-
 	if err = e.write(c, packData); err != nil {
 		e.log(c, "", "send action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("pkg", packData))
 	} else {

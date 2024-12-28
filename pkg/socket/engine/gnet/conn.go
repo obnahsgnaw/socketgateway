@@ -103,10 +103,6 @@ func (c *Conn) Write(b []byte) error {
 			_, err = udpConn.Write(b)
 
 			return err
-		} else {
-			_, err := c.raw.Write(b)
-
-			return err
 		}
 	}
 	_, err := c.raw.Write(b)

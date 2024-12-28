@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net/udp"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"strconv"
 	"strings"
@@ -26,9 +25,8 @@ type Engine struct {
 	t                sockettype.SocketType
 	udpBroadcast     bool
 	udpBroadcastAddr string
-	idProvider       func([]byte) string
-	readInterceptor  func(conn *udp.Conn, data []byte) []byte
-	writeInterceptor func(conn *udp.Conn, data []byte) []byte
+	udpIdProvider    func([]byte) string
+	udpBodyMax       int
 }
 
 func New() *Engine {
@@ -54,8 +52,11 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 		if e.udpBroadcast {
 			udpHdr.BroadcastMode(e.udpBroadcastAddr)
 		}
-		if e.idProvider != nil {
-			udpHdr.IdentifyProvider(e.idProvider)
+		if e.udpIdProvider != nil {
+			udpHdr.IdentifyProvider(e.udpIdProvider)
+		}
+		if e.udpBodyMax > 0 {
+			udpHdr.BodyMax(e.udpBodyMax)
 		}
 		handler = udpHdr
 	} else if t.IsWss() {
@@ -100,16 +101,13 @@ func (e *Engine) UdpBroadcast(sendAddr string) *Engine {
 }
 
 func (e *Engine) UdpIdProvider(fn func([]byte) string) *Engine {
-	e.idProvider = fn
+	e.udpIdProvider = fn
 	return e
 }
 
-func (e *Engine) ReadInterceptor(fn func(*udp.Conn, []byte) []byte) {
-	e.readInterceptor = fn
-}
-
-func (e *Engine) WriteInterceptor(fn func(*udp.Conn, []byte) []byte) {
-	e.writeInterceptor = fn
+func (e *Engine) UdpBodyMax(size int) *Engine {
+	e.udpBodyMax = size
+	return e
 }
 
 func parseProtoAddr(addr string) (network, address string) {
