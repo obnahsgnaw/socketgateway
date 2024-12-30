@@ -56,13 +56,18 @@ type Event struct {
 
 	protocolCoder codec.Codec
 	dataCoder     codec.DataBuilder
-	packageCoder  codec.PkgBuilder
+	packageCoder  PackageBuilder
 }
 
 // AuthenticateProvider 返回user即相当于做了用户认证
 type AuthenticateProvider func(auth *socket.Authentication, encryptedKey []byte, encoder coder.Encoder, encoded, secEnable bool) (user *socket.AuthUser, decryptedKey []byte, err error)
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
+
+type PackageBuilder interface {
+	Unpack(c socket.Conn, b []byte) (p *codec.PKG, err error)
+	Pack(c socket.Conn, p *codec.PKG) (b []byte, err error)
+}
 
 func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, options ...Option) *Event {
 	s := &Event{
@@ -361,9 +366,6 @@ func (e *Event) initCodec(c socket.Conn, rqId string, name codec.Name) {
 	if e.protocolCoder != nil {
 		protoCoder = e.protocolCoder
 	}
-	if e.packageCoder != nil {
-		gatewayPkgCoder = e.packageCoder
-	}
 	if e.dataCoder != nil {
 		dataCoder = e.dataCoder
 	}
@@ -554,8 +556,12 @@ func (e *Event) codecEncode(c socket.Conn, pkg []byte) ([]byte, error) {
 	return e.ProtoCoder(c).Marshal(pkg)
 }
 
-func (e *Event) actionDecode(c socket.Conn, pkg []byte) (*codec.PKG, error) {
-	p, err := e.GatewayPkgCoder(c).Unpack(pkg)
+func (e *Event) actionDecode(c socket.Conn, pkg []byte) (p *codec.PKG, err error) {
+	if e.packageCoder != nil {
+		p, err = e.packageCoder.Unpack(c, pkg)
+	} else {
+		p, err = e.GatewayPkgCoder(c).Unpack(pkg)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -567,6 +573,9 @@ func (e *Event) actionDecode(c socket.Conn, pkg []byte) (*codec.PKG, error) {
 }
 
 func (e *Event) actionEncode(c socket.Conn, gwPkg *codec.PKG) ([]byte, error) {
+	if e.packageCoder != nil {
+		return e.packageCoder.Pack(c, gwPkg)
+	}
 	return e.GatewayPkgCoder(c).Pack(gwPkg)
 }
 

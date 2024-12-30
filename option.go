@@ -149,7 +149,7 @@ func ProtocolCoder(coder codec.Codec) Option {
 	}
 }
 
-func PackageCoder(coder codec.PkgBuilder) Option {
+func PackageCoder(coder eventhandler.PackageBuilder) Option {
 	return func(s *Server) {
 		s.addEventOption(eventhandler.PackageCoder(coder))
 	}
