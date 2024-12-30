@@ -143,6 +143,24 @@ func DefaultDataType(name codec.Name) Option {
 	}
 }
 
+func ProtocolCoder(coder codec.Codec) Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.ProtocolCoder(coder))
+	}
+}
+
+func PackageCoder(coder codec.PkgBuilder) Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.PackageCoder(coder))
+	}
+}
+
+func DataCoder(coder codec.DataBuilder) Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.DataCoder(coder))
+	}
+}
+
 func Engine(e socket.Engine) Option {
 	return func(s *Server) {
 		s.engine = e

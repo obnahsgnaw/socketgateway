@@ -126,3 +126,21 @@ func DefaultDataType(name codec.Name) Option {
 		event.defDataType = name
 	}
 }
+
+func ProtocolCoder(coder codec.Codec) Option {
+	return func(event *Event) {
+		event.protocolCoder = coder
+	}
+}
+
+func PackageCoder(coder codec.PkgBuilder) Option {
+	return func(event *Event) {
+		event.packageCoder = coder
+	}
+}
+
+func DataCoder(coder codec.DataBuilder) Option {
+	return func(event *Event) {
+		event.dataCoder = coder
+	}
+}
