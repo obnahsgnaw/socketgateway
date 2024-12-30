@@ -53,6 +53,10 @@ type Event struct {
 	openInterceptor     func() error
 	receiveInterceptors []HandleFunc
 	sendInterceptors    []HandleFunc
+
+	protocolCoder codec.Codec
+	dataCoder     codec.DataBuilder
+	packageCoder  codec.PkgBuilder
 }
 
 // AuthenticateProvider 返回user即相当于做了用户认证
@@ -127,7 +131,7 @@ func (e *Event) OnBoot(s *socket.Server) {
 	e.proxyTick(e.ctx)
 }
 
-func (e *Event) OnOpen(s *socket.Server, c socket.Conn) {
+func (e *Event) OnOpen(_ *socket.Server, c socket.Conn) {
 	defer utils.RecoverHandler("on open", func(err, stack string) {
 		if e.logger != nil {
 			e.logger.Error("on open err=" + err + ", stack=" + stack)
@@ -353,7 +357,17 @@ func (e *Event) AddTicker(name string, ticker TickHandler) {
 
 func (e *Event) initCodec(c socket.Conn, rqId string, name codec.Name) {
 	dataCoderName, protoCoder, gatewayPkgCoder := e.codecProvider.GetByName(name)
-	e.SetCoder(c, protoCoder, gatewayPkgCoder, e.codedProvider.Provider(dataCoderName))
+	dataCoder := e.codedProvider.Provider(dataCoderName)
+	if e.protocolCoder != nil {
+		protoCoder = e.protocolCoder
+	}
+	if e.packageCoder != nil {
+		gatewayPkgCoder = e.packageCoder
+	}
+	if e.dataCoder != nil {
+		dataCoder = e.dataCoder
+	}
+	e.SetCoder(c, protoCoder, gatewayPkgCoder, dataCoder)
 	e.log(c, rqId, utils.ToStr("data format=", dataCoderName.String()), zapcore.InfoLevel)
 }
 
