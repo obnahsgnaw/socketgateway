@@ -5,7 +5,6 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"net"
 	"sync/atomic"
-	"syscall"
 )
 
 type Server struct {
@@ -19,11 +18,12 @@ type Server struct {
 	onConnect        func(conn socket.Conn)
 	onDisconnect     func(conn socket.Conn, err error)
 	onMessage        func(conn socket.Conn)
-	broadcast        bool
 	broadcastAddr    string
+	broadcastHandle  BroadcastHandler
 	identifyProvider func([]byte) string
 	bodyMax          int
 }
+type BroadcastHandler func(fd uintptr) error
 
 func New(port int, o ...Option) *Server {
 	s := &Server{
@@ -68,8 +68,8 @@ func (s *Server) Init() error {
 	if err != nil {
 		return err
 	}
-	if s.broadcast {
-		if err = listenBroadcast(l); err != nil {
+	if s.broadcastHandle != nil {
+		if err = s.listenBroadcast(l); err != nil {
 			return err
 		}
 	}
@@ -117,7 +117,7 @@ func (s *Server) Run(ctx context.Context) {
 	}
 }
 
-func listenBroadcast(conn *net.UDPConn) error {
+func (s *Server) listenBroadcast(conn *net.UDPConn) error {
 	// 获取文件描述符
 	f, err := conn.File()
 	if err != nil {
@@ -125,7 +125,8 @@ func listenBroadcast(conn *net.UDPConn) error {
 	}
 	fileDescriptor := f.Fd()
 
-	// 设置 socket 选项为广播模式 (SO_BROADCAST)
-	err = syscall.SetsockoptInt(int(fileDescriptor), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
+	// 设置 socket 选项为广播模式 (SO_BROADCAST) 不同的平台系统方法不同
+	//err = syscall.SetsockoptInt(int(fileDescriptor), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
+	err = s.broadcastHandle(fileDescriptor)
 	return err
 }
