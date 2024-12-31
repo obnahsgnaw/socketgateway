@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net/udp"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"strconv"
 	"strings"
@@ -14,19 +15,19 @@ import (
 
 // Engine 封装上层的事件处理 转发给eventHandler
 type Engine struct {
-	ctx              context.Context
-	cancel           context.CancelFunc
-	addr             string
-	event            socket.Event
-	server           *socket.Server
-	index            int64
-	connections      sync.Map
-	stopped          bool
-	t                sockettype.SocketType
-	udpBroadcast     bool
-	udpBroadcastAddr string
-	udpIdProvider    func([]byte) string
-	udpBodyMax       int
+	ctx                context.Context
+	cancel             context.CancelFunc
+	addr               string
+	event              socket.Event
+	server             *socket.Server
+	index              int64
+	connections        sync.Map
+	stopped            bool
+	t                  sockettype.SocketType
+	udpBroadcastHandle udp.BroadcastHandler
+	udpBroadcastAddr   string
+	udpIdProvider      func([]byte) string
+	udpBodyMax         int
 }
 
 func New() *Engine {
@@ -49,8 +50,8 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 		handler = newTcpEngineHandler(e, e.addr)
 	} else if t.IsUdp() {
 		udpHdr := newUdpEngineHandler(e, t.String(), port)
-		if e.udpBroadcast {
-			udpHdr.BroadcastMode(e.udpBroadcastAddr)
+		if e.udpBroadcastHandle != nil {
+			udpHdr.BroadcastMode(e.udpBroadcastHandle, e.udpBroadcastAddr)
 		}
 		if e.udpIdProvider != nil {
 			udpHdr.IdentifyProvider(e.udpIdProvider)
@@ -94,8 +95,8 @@ func (e *Engine) Stop() error {
 	return nil
 }
 
-func (e *Engine) UdpBroadcast(sendAddr string) *Engine {
-	e.udpBroadcast = true
+func (e *Engine) UdpBroadcast(fn udp.BroadcastHandler, sendAddr string) *Engine {
+	e.udpBroadcastHandle = fn
 	e.udpBroadcastAddr = sendAddr
 	return e
 }

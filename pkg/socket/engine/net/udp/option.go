@@ -44,9 +44,11 @@ func Network(network string) Option {
 	}
 }
 
-func Broadcast() Option {
+func Broadcast(fn BroadcastHandler) Option {
 	return func(s *Server) {
-		s.broadcast = true
+		if fn == nil {
+			s.broadcastHandle = fn
+		}
 	}
 }
 
