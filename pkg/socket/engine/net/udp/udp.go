@@ -2,6 +2,7 @@ package udp
 
 import (
 	"context"
+	"errors"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"net"
 	"sync/atomic"
@@ -9,7 +10,7 @@ import (
 
 type Server struct {
 	l                *net.UDPConn
-	clients          map[string]int64
+	clients          map[string]*Conn
 	network          string
 	port             int
 	localAddr        *net.UDPAddr
@@ -28,7 +29,7 @@ type BroadcastHandler func(fd uintptr) error
 func New(port int, o ...Option) *Server {
 	s := &Server{
 		l:       nil,
-		clients: make(map[string]int64),
+		clients: make(map[string]*Conn),
 		network: "udp",
 		port:    port,
 		bodyMax: 1024,
@@ -89,6 +90,7 @@ func (s *Server) Run(ctx context.Context) {
 				var fd int64
 				var ok bool
 				var identify = addr.String()
+				var c *Conn
 				pkg := data[:n]
 				if s.identifyProvider != nil {
 					identify = s.identifyProvider(pkg)
@@ -96,14 +98,14 @@ func (s *Server) Run(ctx context.Context) {
 						identify = addr.String()
 					}
 				}
-				if fd, ok = s.clients[identify]; !ok {
+				if c, ok = s.clients[identify]; !ok {
 					fd = s.fdProvider()
-					s.clients[identify] = fd
-				}
-				c := newConn(int(fd), identify, s.broadcastAddr, s.l, s.localAddr, addr, socket.NewContext(), func(ide string) {
-					delete(s.clients, ide)
-				})
-				if !ok {
+					c = newConn(int(fd), identify, s.broadcastAddr, s.l, s.localAddr, addr, socket.NewContext(), func(cc *Conn, ide string) {
+						delete(s.clients, ide)
+						s.onDisconnect(cc, errors.New("closed by xx"))
+					})
+					s.clients[identify] = c
+					s.clients[identify] = c
 					s.onConnect(c)
 					if c.closed { // 可能被连接中断
 						break

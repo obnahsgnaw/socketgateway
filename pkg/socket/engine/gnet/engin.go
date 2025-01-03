@@ -49,7 +49,7 @@ func (e *Engine) OnOpen(c gnet.Conn) (out []byte, action gnet.Action) {
 			e.OnClose(c, nil)
 		}))
 	} else {
-		c1 = newConn(c, connCtx)
+		c1 = newConn(c, connCtx) // TODO fix close for server event
 	}
 	e.connections.Store(c.Fd(), c1)
 	e.event.OnOpen(e.server, c1)
