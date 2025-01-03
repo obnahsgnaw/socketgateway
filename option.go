@@ -110,7 +110,7 @@ func CodedProvider(p codec.DataBuilderProvider) Option {
 func Rpc(ins *rpc2.Server) Option {
 	return func(s *Server) {
 		s.rpcServer = ins
-		s.rpcServer.AddRegInfo(s.rawSocketType.String()+"-gateway", utils.ToStr(s.rawSocketType.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, s.rawServerType))
+		s.rpcServer.AddRegInfo(s.proxySocketType.String()+"-gateway", utils.ToStr(s.proxySocketType.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, s.proxyServerType))
 	}
 }
 
