@@ -195,11 +195,6 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		e.log(c, rqId, "read failed, err="+err.Error(), zapcore.WarnLevel)
 		return
 	}
-
-	go e.handleTraffic(c, rqId, rawPkg)
-}
-
-func (e *Event) handleTraffic(c socket.Conn, rqId string, rawPkg []byte) {
 	// Initialize the encryption and decryption key
 	keyHit, secResponse, initPackage, secErr := e.authenticate(c, rqId, rawPkg)
 	if keyHit {
@@ -215,6 +210,10 @@ func (e *Event) handleTraffic(c socket.Conn, rqId string, rawPkg []byte) {
 		return
 	}
 
+	go e.handleTraffic(c, rqId, initPackage)
+}
+
+func (e *Event) handleTraffic(c socket.Conn, rqId string, initPackage []byte) {
 	// Unpacking a protocol package
 	err := e.codecDecode(c, initPackage, func(packedPkg []byte) {
 		e.log(c, rqId, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
@@ -285,9 +284,6 @@ func (e *Event) handleMessage(c socket.Conn, rqId string, packedPkg []byte) (rqA
 	gwPkg, acErr := e.actionDecode(c, decryptedData)
 	if acErr != nil {
 		err = errors.New("action decode failed, err=" + acErr.Error())
-		if respPackage, err1 = e.packGatewayError(c, gatewayv1.GatewayError_ActionErr, 0); err1 != nil {
-			err = errors.New(err.Error() + ":" + err1.Error())
-		}
 		return
 	}
 	rqData = gwPkg.Data
