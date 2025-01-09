@@ -11,7 +11,6 @@ import (
 	rpc2 "github.com/obnahsgnaw/rpc"
 	"github.com/obnahsgnaw/socketgateway"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/gnet"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/moc"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
@@ -42,7 +41,6 @@ func main() {
 	defer app.Release()
 
 	s := socketgateway.New(app, sockettype.TCP, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001})
-	s.With(socketgateway.Engine(gnet.New()))
 	l, _ := rpc2.NewListener(url.Host{Ip: "127.0.0.1", Port: 8002})
 	rps := rpc2.New(app, l, "gw", "gw", endtype.Frontend, nil)
 	s.With(socketgateway.Rpc(rps))

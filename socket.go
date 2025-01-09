@@ -18,7 +18,7 @@ import (
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
 	slbv1 "github.com/obnahsgnaw/socketapi/gen/slb/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/action"
 	"github.com/obnahsgnaw/socketgateway/service/doc"
@@ -197,7 +197,7 @@ func (s *Server) Run(failedCb func(error)) {
 	}
 	s.logger.Info("init start...")
 	if s.engine == nil {
-		s.engine = net.New()
+		s.engine = engine.Default()
 		s.logger.Info("socket engine initialize(default)")
 	} else {
 		s.logger.Info("socket engine initialize(customer)")
