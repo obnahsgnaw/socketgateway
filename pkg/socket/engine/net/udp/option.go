@@ -44,17 +44,15 @@ func Network(network string) Option {
 	}
 }
 
-func Broadcast(fn BroadcastHandler) Option {
+func BroadcastListen() Option {
 	return func(s *Server) {
-		if fn == nil {
-			s.broadcastHandle = fn
-		}
+		s.broadcastListen = true
 	}
 }
 
-func BroadcastAddr(addr string) Option {
+func BroadcastSend(addr string) Option {
 	return func(s *Server) {
-		s.broadcastAddr = addr
+		s.broadcastSendAddr = addr
 	}
 }
 

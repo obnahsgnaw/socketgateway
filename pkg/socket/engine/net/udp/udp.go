@@ -4,27 +4,27 @@ import (
 	"context"
 	"errors"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net/udp/broadcastudp"
 	"net"
 	"sync/atomic"
 )
 
 type Server struct {
-	l                *net.UDPConn
-	clients          map[string]*Conn
-	network          string
-	port             int
-	localAddr        *net.UDPAddr
-	fdProvider       func() int64
-	index            int64
-	onConnect        func(conn socket.Conn)
-	onDisconnect     func(conn socket.Conn, err error)
-	onMessage        func(conn socket.Conn)
-	broadcastAddr    string
-	broadcastHandle  BroadcastHandler
-	identifyProvider func([]byte) string
-	bodyMax          int
+	l                 *net.UDPConn
+	clients           map[string]*Conn
+	network           string
+	port              int
+	localAddr         *net.UDPAddr
+	fdProvider        func() int64
+	index             int64
+	onConnect         func(conn socket.Conn)
+	onDisconnect      func(conn socket.Conn, err error)
+	onMessage         func(conn socket.Conn)
+	broadcastSendAddr string
+	broadcastListen   bool
+	identifyProvider  func([]byte) string
+	bodyMax           int
 }
-type BroadcastHandler func(fd uintptr) error
 
 func New(port int, o ...Option) *Server {
 	s := &Server{
@@ -69,8 +69,8 @@ func (s *Server) Init() error {
 	if err != nil {
 		return err
 	}
-	if s.broadcastHandle != nil {
-		if err = s.listenBroadcast(l); err != nil {
+	if s.broadcastListen {
+		if err = broadcastudp.Upgrade(l); err != nil {
 			return err
 		}
 	}
@@ -94,41 +94,26 @@ func (s *Server) Run(ctx context.Context) {
 				pkg := data[:n]
 				if s.identifyProvider != nil {
 					identify = s.identifyProvider(pkg)
-					if identify == "" {
-						identify = addr.String()
-					}
 				}
-				if c, ok = s.clients[identify]; !ok {
-					fd = s.fdProvider()
-					c = newConn(int(fd), identify, s.broadcastAddr, s.l, s.localAddr, addr, socket.NewContext(), func(cc *Conn, ide string) {
-						delete(s.clients, ide)
-						s.onDisconnect(cc, errors.New("closed by xx"))
-					})
-					s.clients[identify] = c
-					s.clients[identify] = c
-					s.onConnect(c)
-					if c.closed { // 可能被连接中断
-						break
+				if identify != "" {
+					if c, ok = s.clients[identify]; !ok {
+						fd = s.fdProvider()
+						c = newConn(int(fd), identify, s.broadcastSendAddr, s.l, s.localAddr, addr, socket.NewContext(), func(cc *Conn, ide string) {
+							delete(s.clients, ide)
+							s.onDisconnect(cc, errors.New("closed by xx"))
+						})
+						s.clients[identify] = c
+						s.clients[identify] = c
+						s.onConnect(c)
+						if c.closed { // 可能被连接中断
+							break
+						}
 					}
+					c.pkg = append(c.pkg, pkg)
+					c.Context().Active()
+					s.onMessage(c)
 				}
-				c.pkg = append(c.pkg, pkg)
-				c.Context().Active()
-				s.onMessage(c)
 			}
 		}
 	}
-}
-
-func (s *Server) listenBroadcast(conn *net.UDPConn) error {
-	// 获取文件描述符
-	f, err := conn.File()
-	if err != nil {
-		return err
-	}
-	fileDescriptor := f.Fd()
-
-	// 设置 socket 选项为广播模式 (SO_BROADCAST) 不同的平台系统方法不同
-	//err = syscall.SetsockoptInt(int(fileDescriptor), syscall.SOL_SOCKET, syscall.SO_BROADCAST, 1)
-	err = s.broadcastHandle(fileDescriptor)
-	return err
 }

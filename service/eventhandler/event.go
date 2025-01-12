@@ -210,12 +210,8 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		return
 	}
 
-	go e.handleTraffic(c, rqId, initPackage)
-}
-
-func (e *Event) handleTraffic(c socket.Conn, rqId string, initPackage []byte) {
 	// Unpacking a protocol package
-	err := e.codecDecode(c, initPackage, func(packedPkg []byte) {
+	err = e.codecDecode(c, initPackage, func(packedPkg []byte) {
 		e.log(c, rqId, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
 		rqAction, respAction, rqData, respData, respPackage, err1 := e.handleMessage(c, rqId, packedPkg)
 		if err1 != nil {

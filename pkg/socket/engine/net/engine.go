@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net/udp"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"strconv"
 	"strings"
@@ -24,7 +23,7 @@ type Engine struct {
 	connections        sync.Map
 	stopped            bool
 	t                  sockettype.SocketType
-	udpBroadcastHandle udp.BroadcastHandler
+	udpBroadcastListen bool
 	udpBroadcastAddr   string
 	udpIdProvider      func([]byte) string
 	udpBodyMax         int
@@ -50,8 +49,8 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 		handler = newTcpEngineHandler(e, e.addr)
 	} else if t.IsUdp() {
 		udpHdr := newUdpEngineHandler(e, t.String(), port)
-		if e.udpBroadcastHandle != nil {
-			udpHdr.BroadcastMode(e.udpBroadcastHandle, e.udpBroadcastAddr)
+		if e.udpBroadcastListen {
+			udpHdr.BroadcastMode(e.udpBroadcastAddr)
 		}
 		if e.udpIdProvider != nil {
 			udpHdr.IdentifyProvider(e.udpIdProvider)
@@ -95,8 +94,12 @@ func (e *Engine) Stop() error {
 	return nil
 }
 
-func (e *Engine) UdpBroadcast(fn udp.BroadcastHandler, sendAddr string) *Engine {
-	e.udpBroadcastHandle = fn
+func (e *Engine) UdpBroadcastListen() *Engine {
+	e.udpBroadcastListen = true
+	return e
+}
+
+func (e *Engine) UdpBroadcastSend(sendAddr string) *Engine {
 	e.udpBroadcastAddr = sendAddr
 	return e
 }
