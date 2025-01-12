@@ -35,9 +35,9 @@ func newUdpEngineHandler(e *Engine, network string, port int) *udpEngineHandler 
 	}
 }
 
-func (h *udpEngineHandler) BroadcastMode(fn udp.BroadcastHandler, addr string) {
-	h.u.With(udp.Broadcast(fn))
-	h.u.With(udp.BroadcastAddr(addr))
+func (h *udpEngineHandler) BroadcastMode(sendAddr string) {
+	h.u.With(udp.BroadcastListen())
+	h.u.With(udp.BroadcastSend(sendAddr))
 }
 
 func (h *udpEngineHandler) IdentifyProvider(fn func([]byte) string) {
