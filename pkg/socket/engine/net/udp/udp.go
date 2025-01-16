@@ -6,6 +6,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net/udp/broadcastudp"
 	"net"
+	"strconv"
 	"sync/atomic"
 )
 
@@ -61,10 +62,11 @@ func (s *Server) With(o ...Option) {
 }
 
 func (s *Server) Init() error {
-	s.localAddr = &net.UDPAddr{
-		IP:   net.IPv4(0, 0, 0, 0),
-		Port: s.port,
+	addr, err := net.ResolveUDPAddr(s.network, "0.0.0.0:"+strconv.Itoa(s.port))
+	if err != nil {
+		return err
 	}
+	s.localAddr = addr
 	l, err := net.ListenUDP(s.network, s.localAddr)
 	if err != nil {
 		return err
