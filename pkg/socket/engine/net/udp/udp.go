@@ -6,7 +6,6 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/net/udp/broadcastudp"
 	"net"
-	"strconv"
 	"sync/atomic"
 )
 
@@ -62,17 +61,22 @@ func (s *Server) With(o ...Option) {
 }
 
 func (s *Server) Init() error {
-	addr, err := net.ResolveUDPAddr(s.network, "0.0.0.0:"+strconv.Itoa(s.port))
-	if err != nil {
-		return err
+	s.localAddr = &net.UDPAddr{
+		IP:   net.IPv4(0, 0, 0, 0),
+		Port: s.port,
 	}
-	s.localAddr = addr
 	l, err := net.ListenUDP(s.network, s.localAddr)
 	if err != nil {
 		return err
 	}
 	if s.broadcastListen {
-		if err = broadcastudp.Upgrade(l); err != nil {
+		// 获取文件描述符
+		f, err1 := l.File()
+		if err1 != nil {
+			return err
+		}
+		fileDescriptor := f.Fd()
+		if err = broadcastudp.Upgrade(fileDescriptor); err != nil {
 			return err
 		}
 	}
