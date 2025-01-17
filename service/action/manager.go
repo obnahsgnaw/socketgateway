@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/obnahsgnaw/application/pkg/url"
 	"github.com/obnahsgnaw/application/pkg/utils"
+	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
 	"github.com/obnahsgnaw/socketutil/codec"
@@ -14,12 +15,13 @@ import (
 )
 
 type Manager struct {
-	handlers      sync.Map // action-id, action-handler
-	actions       sync.Map // action-id, [server-host]action-name
-	servers       sync.Map // server-host => [action-id]action-name
-	closeAction   codec.ActionId
-	remoteHandler RemoteHandler
-	gateway       url.Host
+	handlers            sync.Map // action-id, action-handler
+	actions             sync.Map // action-id, [server-host]action-name
+	servers             sync.Map // server-host => [action-id]action-name
+	closeAction         codec.ActionId
+	authenticateActions sync.Map // map[string]codec.ActionId
+	remoteHandler       RemoteHandler
+	gateway             url.Host
 }
 
 type actionHandler struct {
@@ -70,6 +72,7 @@ func (m *Manager) HandleClose(c socket.Conn) {
 	}
 	wg.Wait()
 }
+
 func (m *Manager) closeTask(c socket.Conn, gw string, wg *sync.WaitGroup) func() {
 	return func() {
 		_, _, _ = m.remoteHandler.Call("", gw, m.gateway.String(), "", c, m.closeAction, nil)
@@ -80,6 +83,11 @@ func (m *Manager) closeTask(c socket.Conn, gw string, wg *sync.WaitGroup) func()
 // RegisterHandlerAction register an action with handler
 func (m *Manager) RegisterHandlerAction(action codec.Action, structure DataStructure, handler Handler) {
 	m.handlers.Store(action.Id, actionHandler{Action: action, structure: structure, Handler: handler})
+}
+
+func (m *Manager) RegisterAuthenticateHandlerAction(tp string, action codec.Action, structure DataStructure, handler Handler) {
+	m.RegisterHandlerAction(action, structure, handler)
+	m.authenticateActions.Store(tp, action.Id)
 }
 
 // RegisterRemoteAction register an action with server host
@@ -106,6 +114,11 @@ func (m *Manager) RegisterRemoteAction(action codec.Action, serverHost string, f
 	m.servers.Store(serverHost, actions)
 
 	return
+}
+
+func (m *Manager) RegisterAuthenticateRemoteAction(tp string, action codec.Action, serverHost string, flbNum string) {
+	m.RegisterRemoteAction(action, serverHost, flbNum)
+	m.authenticateActions.Store(tp, action.Id)
 }
 
 // UnregisterRemoteAction unregister a server action
@@ -238,5 +251,43 @@ func (m *Manager) Dispatch(c socket.Conn, rqId string, b codec.DataBuilder, acti
 		return
 	}
 	respAction, respData, err = m.remoteHandler.Call(rqId, s, m.gateway.String(), b.Name().String(), c, actionId, actionData)
+	return
+}
+
+func (m *Manager) Authenticate(c socket.Conn, rqId string, b codec.DataBuilder, tp, id string, secret string) (auth *socket.Authentication, uid string, key []byte, err error) {
+	rq := &handlerv1.AuthenticateRequest{
+		Gateway: m.gateway.String(),
+		Fd:      int64(c.Fd()),
+		Type:    tp,
+		Id:      id,
+		Secret:  secret,
+	}
+	var bb []byte
+	if bb, err = b.Pack(rq); err != nil {
+		return
+	}
+	aid, ok := m.authenticateActions.Load(tp)
+	if !ok {
+		err = errors.New("authenticate type not support")
+		return
+	}
+	if _, bb, err = m.Dispatch(c, rqId, b, aid.(codec.ActionId), bb); err != nil {
+		return
+	}
+	var response handlerv1.AuthenticateResponse
+	if err = b.Unpack(bb, &response); err != nil {
+		return
+	}
+	if response.Error != "" {
+		err = errors.New(response.Error)
+		return
+	}
+	auth = &socket.Authentication{
+		Type:   response.Type,
+		Id:     response.Id,
+		Master: response.Master,
+	}
+	uid = response.UserId
+	key = response.Key
 	return
 }

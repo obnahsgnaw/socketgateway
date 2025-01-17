@@ -74,6 +74,7 @@ type Server struct {
 
 type AuthProvider interface {
 	GetAuthedUser(token string) (*socket.AuthUser, error)
+	GetIdUser(uid string) (*socket.AuthUser, error)
 }
 
 func st2hdt(sst servertype.ServerType) servertype.ServerType {
@@ -418,6 +419,10 @@ func (s *Server) defaultListen() {
 				Success: false,
 			}
 			respData = response
+			if c.Context().Authed() {
+				response.Success = true
+				return
+			}
 			if s.authProvider == nil {
 				response.Success = true
 			} else {
@@ -426,12 +431,22 @@ func (s *Server) defaultListen() {
 					s.Logger().Error(s.msg("auth action request resp error: err=" + err.Error()))
 					response.Success = false
 				} else {
-					// TODO 可以验证一下 Authentication 的ID
 					response.Success = true
 					if u.Attr == nil {
 						u.Attr = make(map[string]string)
 					}
 					c.Context().Auth(u)
+					uid, _ := u.Attr["user_id"]
+					if uid != c.Context().Authentication().Id {
+						s.Logger().Error(s.msg("auth action request resp error: uid diff of authenticate id", uid, c.Context().Authentication().Id))
+						response.Success = false
+						return
+					}
+					c.Context().Authenticate(&socket.Authentication{
+						Type:   c.Context().Authentication().Type,
+						Id:     uid,
+						Master: uid,
+					})
 					s.server.BindId(c, socket.ConnId{
 						Id:   strconv.Itoa(int(u.Id)),
 						Type: "UID",
@@ -459,7 +474,16 @@ func (s *Server) watch(register regCenter.Register) error {
 		segments := strings.Split(key, "/")
 		id := segments[len(segments)-3]
 		host := segments[len(segments)-2]
-		actionId, _ := strconv.Atoi(segments[len(segments)-1])
+		actionStr := segments[len(segments)-1]
+		authenticateType := ""
+		var actionId int
+		if strings.Contains(actionStr, ":") {
+			segs := strings.Split(actionStr, ":")
+			authenticateType = segs[0]
+			actionId, _ = strconv.Atoi(segs[1])
+		} else {
+			actionId, _ = strconv.Atoi(actionStr)
+		}
 		idSegments := strings.Split(id, "-")
 		moduleName := idSegments[0]
 		keyName := idSegments[1]
@@ -474,10 +498,17 @@ func (s *Server) watch(register regCenter.Register) error {
 				val = valNum[0]
 				flbNum = valNum[1]
 			}
-			s.actManager.RegisterRemoteAction(codec.Action{
-				Id:   codec.ActionId(actionId),
-				Name: val,
-			}, host, flbNum)
+			if authenticateType != "" {
+				s.actManager.RegisterAuthenticateRemoteAction(authenticateType, codec.Action{
+					Id:   codec.ActionId(actionId),
+					Name: val,
+				}, host, flbNum)
+			} else {
+				s.actManager.RegisterRemoteAction(codec.Action{
+					Id:   codec.ActionId(actionId),
+					Name: val,
+				}, host, flbNum)
+			}
 		}
 	})
 	if err != nil {

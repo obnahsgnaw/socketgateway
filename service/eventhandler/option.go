@@ -1,10 +1,8 @@
 package eventhandler
 
 import (
-	"crypto"
 	"github.com/obnahsgnaw/goutils/security/coder"
 	"github.com/obnahsgnaw/goutils/security/esutil"
-	"github.com/obnahsgnaw/goutils/security/rsautil"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
@@ -29,9 +27,10 @@ func Heartbeat(interval time.Duration) Option {
 	}
 }
 
-func Auth() Option {
+func Auth(authProvider AuthProvider) Option {
 	return func(event *Event) {
 		event.authEnable = true
+		event.authProvider = authProvider
 		event.AddTicker("auth-ticker", authTicker(time.Second*10))
 	}
 }
@@ -53,14 +52,13 @@ func Tick(interval time.Duration) Option {
 
 func SecPrivateKey(key []byte) Option {
 	return func(event *Event) {
-		event.privateKey = key
+		event.commonPrivateKey = key
 	}
 }
 
 func SecEncoder(encoder coder.Encoder) Option {
 	return func(event *Event) {
 		event.secEncoder = encoder
-		event.rsa = rsautil.New(rsautil.PKCS1Public(), rsautil.PKCS1Private(), rsautil.SignHash(crypto.SHA256), rsautil.Encoder(encoder))
 		event.es = esutil.New(event.esTp, event.esMode, esutil.Encoder(encoder))
 	}
 }
@@ -142,5 +140,17 @@ func PackageCoder(coder PackageBuilder) Option {
 func DataCoder(coder codec.DataBuilder) Option {
 	return func(event *Event) {
 		event.dataCoder = coder
+	}
+}
+
+func UserAuthenticate() Option {
+	return func(event *Event) {
+		event.withUserAuthenticate()
+	}
+}
+
+func PrivateKeyForAll() Option {
+	return func(event *Event) {
+		event.commonCertForAll = true
 	}
 }

@@ -39,28 +39,43 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 		err = status.New(codes.InvalidArgument, "param:ActionId is required").Err()
 		return
 	}
-	var c socket.Conn
+	var cc []socket.Conn
 	if in.GetFd() > 0 {
-		c = gw.s().GetFdConn(int(in.GetFd()))
+		cc = []socket.Conn{gw.s().GetFdConn(int(in.GetFd()))}
 	} else if in.GetId() != nil {
-		c = gw.s().GetIdConn(socket.ConnId{
-			Id:   in.GetId().Id,
-			Type: in.GetId().Type,
-		})
+		if in.GetId().Type == "TARGET" {
+			cc = gw.s().GetRelatedConn(in.GetId().Id)
+		} else {
+			c := gw.s().GetIdConn(socket.ConnId{
+				Id:   in.GetId().Id,
+				Type: in.GetId().Type,
+			})
+			cc = []socket.Conn{c}
+		}
 	}
-	if c == nil {
+	if len(cc) == 0 {
 		err = status.New(codes.NotFound, "connection not found or not support").Err()
 		return
 	}
-	coderName := connutil.CoderName(c)
-	var msg []byte
-	if coderName == codec.Proto {
-		msg = in.PbMessage
-	} else {
-		msg = in.JsonMessage
+	var send bool
+	var lastErr error
+	for _, c := range cc {
+		coderName := connutil.CoderName(c)
+		var msg []byte
+		if coderName == codec.Proto {
+			msg = in.PbMessage
+		} else {
+			msg = in.JsonMessage
+		}
+		if err = gw.e().Send(c, rqId, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
+			lastErr = status.New(codes.Internal, "send message failed, err="+err.Error()).Err()
+		} else {
+			send = true
+		}
 	}
-	if err = gw.e().Send(c, rqId, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
-		err = status.New(codes.Internal, "send message failed, err="+err.Error()).Err()
+	// 发送到一个端即可
+	if !send {
+		err = lastErr
 	}
 
 	resp = &messagev1.SendMessageResponse{}

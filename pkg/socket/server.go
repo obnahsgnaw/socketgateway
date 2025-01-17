@@ -24,15 +24,16 @@ type Config struct {
 
 // Server 服务
 type Server struct {
-	ctx         context.Context
-	typ         sockettype.SocketType
-	port        int
-	event       Event
-	config      *Config
-	groups      *group.Groups
-	engine      Engine
-	connections sync.Map // map[int]Conn
-	connIdBinds sync.Map // map[string]int
+	ctx          context.Context
+	typ          sockettype.SocketType
+	port         int
+	event        Event
+	config       *Config
+	groups       *group.Groups
+	engine       Engine
+	connections  sync.Map // map[int]Conn
+	connIdBinds  sync.Map // map[string]int
+	relatedBinds sync.Map // map[string][]string
 }
 
 // New return a Server
@@ -161,4 +162,38 @@ func (s *Server) delConn(c Conn) {
 			s.connIdBinds.Delete(id.String())
 		})
 	}
+}
+
+func (s *Server) BindRelate(master, id string) {
+	if v, ok := s.relatedBinds.Load(master); ok {
+		vv := v.([]string)
+		vv = append(vv, id)
+		s.relatedBinds.Store(master, vv)
+	} else {
+		s.relatedBinds.Store(master, []string{id})
+	}
+}
+
+func (s *Server) UnbindRelate(master, id string) {
+	if v, ok := s.relatedBinds.Load(master); ok {
+		vv := v.([]string)
+		var vv1 []string
+		for _, v1 := range vv {
+			if v1 != id {
+				vv1 = append(vv1, v1)
+			}
+		}
+		s.relatedBinds.Store(master, vv1)
+	}
+}
+
+func (s *Server) GetRelatedConn(master string) []Conn {
+	var cc []Conn
+	if v, ok := s.relatedBinds.Load(master); ok {
+		vv := v.([]string)
+		for _, v1 := range vv {
+			cc = append(cc, s.GetIdConn(ConnId{Id: v1, Type: "TARGET"}))
+		}
+	}
+	return cc
 }

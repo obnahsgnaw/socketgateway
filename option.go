@@ -48,7 +48,7 @@ func Heartbeat(interval time.Duration) Option {
 func Auth(p AuthProvider) Option {
 	return func(s *Server) {
 		s.authProvider = p
-		s.addEventOption(eventhandler.Auth())
+		s.addEventOption(eventhandler.Auth(p))
 	}
 }
 
@@ -137,6 +137,7 @@ func Interceptor(i func() error) Option {
 		s.addEventOption(eventhandler.Interceptor(i))
 	}
 }
+
 func DefaultDataType(name codec.Name) Option {
 	return func(s *Server) {
 		s.addEventOption(eventhandler.DefaultDataType(name))
@@ -171,5 +172,17 @@ func Proxy(st sockettype.SocketType) Option {
 	return func(s *Server) {
 		s.proxySocketType = st
 		s.proxyServerType = st.ToServerType()
+	}
+}
+
+func UserAuthenticate() Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.UserAuthenticate())
+	}
+}
+
+func PrivateKeyForAll() Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.PrivateKeyForAll())
 	}
 }
