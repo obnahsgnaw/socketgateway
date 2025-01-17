@@ -10,6 +10,7 @@ import (
 	"github.com/obnahsgnaw/goutils/security/coder"
 	"github.com/obnahsgnaw/goutils/security/esutil"
 	"github.com/obnahsgnaw/goutils/security/rsautil"
+	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/group"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
@@ -22,33 +23,33 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // Event 事件处理引擎
 type Event struct {
-	ctx           context.Context
-	am            *action.Manager
-	tickHandlers  map[string]TickHandler
-	logWatcher    func(socket.Conn, string, zapcore.Level, ...zap.Field)
-	logger        *zap.Logger
-	st            sockettype.SocketType
-	codecProvider codec.Provider
-	codedProvider codec.DataBuilderProvider
-	authEnable    bool
-	tickInterval  time.Duration
-	privateKey    []byte
-	defaultUser   *socket.AuthUser
-	rsa           *rsautil.Rsa // 连接后第一包发送rsa加密 aes密钥@时间戳 交换密钥， 服务端 rsa解密得到aes 密钥， 后续使用其来解析aes cbc 加密的内容体， 内容体组成为：iv（16byte）+内容 (aes256 最小16字节) 一个内容最小32字节
-	es            *esutil.ADes
-	esTp          esutil.EsType
-	esMode        esutil.EsMode
-	secEncoder    coder.Encoder
-	secEncode     bool
-	secTtl        int64 // second
-	ss            *socket.Server
-	authProviders map[string]AuthenticateProvider
-	defDataType   codec.Name
+	ctx              context.Context
+	am               *action.Manager
+	tickHandlers     map[string]TickHandler
+	logWatcher       func(socket.Conn, string, zapcore.Level, ...zap.Field)
+	logger           *zap.Logger
+	st               sockettype.SocketType
+	codecProvider    codec.Provider
+	codedProvider    codec.DataBuilderProvider
+	authEnable       bool
+	tickInterval     time.Duration
+	commonPrivateKey []byte
+	defaultUser      *socket.AuthUser
+	rsa              *rsautil.Rsa // 连接后第一包发送rsa加密 aes密钥@时间戳 交换密钥， 服务端 rsa解密得到aes 密钥， 后续使用其来解析aes cbc 加密的内容体， 内容体组成为：iv（16byte）+内容 (aes256 最小16字节) 一个内容最小32字节
+	es               *esutil.ADes
+	esTp             esutil.EsType
+	esMode           esutil.EsMode
+	secEncoder       coder.Encoder
+	secEncode        bool
+	secTtl           int64 // second
+	ss               *socket.Server
+	defDataType      codec.Name
 
 	openInterceptor     func() error
 	receiveInterceptors []HandleFunc
@@ -57,10 +58,12 @@ type Event struct {
 	protocolCoder codec.Codec
 	dataCoder     codec.DataBuilder
 	packageCoder  PackageBuilder
-}
 
-// AuthenticateProvider 返回user即相当于做了用户认证
-type AuthenticateProvider func(auth *socket.Authentication, encryptedKey []byte, encoder coder.Encoder, encoded, secEnable bool) (user *socket.AuthUser, decryptedKey []byte, err error)
+	authProvider          AuthProvider
+	authenticateDataCoder codec.DataBuilder
+
+	commonCertForAll bool // 都使用PrivateKey,不使用remote authenticate的解密
+}
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
 
@@ -69,20 +72,25 @@ type PackageBuilder interface {
 	Pack(c socket.Conn, p *codec.PKG) (b []byte, err error)
 }
 
+type AuthProvider interface {
+	GetAuthedUser(token string) (*socket.AuthUser, error)
+	GetIdUser(uid string) (*socket.AuthUser, error)
+}
+
 func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, options ...Option) *Event {
 	s := &Event{
-		ctx:           ctx,
-		am:            m,
-		st:            st,
-		tickHandlers:  make(map[string]TickHandler),
-		rsa:           rsautil.New(rsautil.PKCS1Public(), rsautil.PKCS1Private(), rsautil.SignHash(crypto.SHA256), rsautil.Encoder(coder.B64StdEncoding)),
-		es:            esutil.New(esutil.Aes256, esutil.CbcMode, esutil.Encoder(coder.B64StdEncoding)),
-		esTp:          esutil.Aes256,
-		esMode:        esutil.CbcMode,
-		secEncoder:    coder.B64StdEncoding,
-		secTtl:        60,
-		authProviders: make(map[string]AuthenticateProvider),
-		defDataType:   codec.Json,
+		ctx:                   ctx,
+		am:                    m,
+		st:                    st,
+		tickHandlers:          make(map[string]TickHandler),
+		rsa:                   rsautil.New(rsautil.PKCS1Public(), rsautil.PKCS1Private(), rsautil.SignHash(crypto.SHA256), rsautil.Encoder(coder.B64StdEncoding)),
+		es:                    esutil.New(esutil.Aes256, esutil.CbcMode, esutil.Encoder(coder.B64StdEncoding)),
+		esTp:                  esutil.Aes256,
+		esMode:                esutil.CbcMode,
+		secEncoder:            coder.B64StdEncoding,
+		secTtl:                60,
+		defDataType:           codec.Json,
+		authenticateDataCoder: codec.NewProtobufDataBuilder(),
 	}
 	toData := func(p *codec.PKG) codec.DataPtr {
 		if p == nil {
@@ -110,15 +118,10 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 	s.codedProvider = codec.NewDbp()
 	s.With(options...)
 	s.AddTicker("authenticate-ticker", authenticateTicker(time.Second*10))
-	s.RegisterAuthenticate("user", func(auth *socket.Authentication, encryptedKey []byte, encoder coder.Encoder, decoded, secEnable bool) (user *socket.AuthUser, decryptedKey []byte, err error) {
-		if secEnable {
-			decryptedKey, err = s.rsa.Decrypt(encryptedKey, s.privateKey, decoded)
-		}
-		if !s.authEnable {
-			user = s.defaultUser
-		}
-		return
-	})
+	if s.st.IsWss() {
+		s.withUserAuthenticate()
+	}
+
 	return s
 }
 
@@ -200,9 +203,9 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	if keyHit {
 		_ = c.Write([]byte(secResponse))
 		if secErr != nil {
-			e.log(c, rqId, "crypt key parse failed, err="+secErr.Error(), zapcore.WarnLevel)
+			e.log(c, rqId, "authenticate failed, err="+secErr.Error(), zapcore.WarnLevel)
 		} else {
-			e.log(c, rqId, "crypt key parse success", zapcore.DebugLevel)
+			e.log(c, rqId, "authenticate success", zapcore.DebugLevel)
 		}
 		return
 	}
@@ -365,11 +368,7 @@ func (e *Event) initCodec(c socket.Conn, rqId string, name codec.Name) {
 	e.log(c, rqId, utils.ToStr("data format=", dataCoderName.String()), zapcore.InfoLevel)
 }
 
-func (e *Event) RegisterAuthenticate(name string, provider AuthenticateProvider) {
-	e.authProviders[name] = provider
-}
-
-// 类型@标识@数据类型::RSA{es-key+10位时间戳}
+// 类型@标识@数据类型::RSA{es-key+10位时间戳} base64-stdEncode
 func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, response string, initPackage []byte, err error) {
 	if !e.CryptoKeyInitialized(c) {
 		// 处理proxy
@@ -400,26 +399,31 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 				codeType = codec.Json
 			}
 		} else {
-			authentication = &socket.Authentication{Type: "user", Id: ""}
+			authentication = &socket.Authentication{Type: "user"}
 			codeType = e.defDataType
 			notAuthenticatePackage = true
 		}
 
 		var keys []byte
-		var user *socket.AuthUser
-		if ap, ok := e.authProviders[authentication.Type]; !ok {
+		var uid string
+		secret := string(pkg)
+		if !e.Security() || e.commonCertForAll {
+			secret = ""
+		}
+		if authentication, uid, keys, err = e.am.Authenticate(c, rqId, e.authenticateDataCoder, authentication.Type, authentication.Id, secret); err != nil {
 			response = "222"
-			err = errors.New("authentication types that are not supported")
 			return
-		} else {
-			if user, keys, err = ap(authentication, pkg, e.secEncoder, e.secEncode, e.Security()); err != nil {
-				response = "222"
-				return
-			}
 		}
 
 		var key []byte
 		if e.Security() {
+			if e.commonCertForAll {
+				keys, err = e.rsa.Decrypt(pkg, e.commonPrivateKey, true)
+				if err != nil {
+					response = "222"
+					return
+				}
+			}
 			if len(keys) != e.es.Type().KeyLen()+10 {
 				response = "222"
 				err = errors.New("invalid crypt key length")
@@ -449,15 +453,55 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			}
 		}
 
-		e.log(c, rqId, utils.ToStr("authenticate type=", authentication.Type, "authenticate id=", authentication.Id), zapcore.InfoLevel)
+		// 获取用户
+		var user *socket.AuthUser
+		if e.AuthEnabled() {
+			if uid == "" {
+				// 非用用户类型必须要uid
+				if authentication.Type != "user" {
+					response = "222"
+					err = errors.New("target uid empty")
+					return
+				}
+			} else {
+				if authentication.Type != "user" {
+					if user, err = e.authProvider.GetIdUser(uid); err != nil {
+						response = "222"
+						return
+					}
+				} else {
+					if strings.Contains(uid, " ") { // app + 空格 + token
+						if user, err = e.authProvider.GetAuthedUser(uid); err != nil {
+							response = "222"
+							return
+						}
+						userId, _ := user.Attr["user_id"]
+						authentication.Id = userId
+						authentication.Master = userId
+					} else {
+						// 纯id 需要后续认证
+					}
+				}
+			}
+		} else {
+			user = e.defaultUser
+		}
+
+		e.log(c, rqId, utils.ToStr("authenticate: type=", authentication.Type, ", id=", authentication.Id), zapcore.InfoLevel)
 		c.Context().Authenticate(authentication)
+		e.ss.BindId(c, socket.ConnId{
+			Id:   authentication.Id,
+			Type: "TARGET",
+		})
+		e.ss.BindRelate(authentication.Master, authentication.Id)
+		// 用户类型 可以后面进行认证
 		if user != nil {
+			e.log(c, rqId, utils.ToStr("authenticate user=", user.Name), zapcore.InfoLevel)
 			c.Context().Auth(user)
 			e.ss.BindId(c, socket.ConnId{
 				Id:   strconv.Itoa(int(user.Id)),
 				Type: "UID",
 			})
-			e.log(c, rqId, utils.ToStr("authenticate with user=", user.Name), zapcore.InfoLevel)
 		}
 		e.SetCryptoKey(c, key)
 		if len(key) > 0 {
@@ -713,5 +757,30 @@ func (e *Event) AuthEnabled() bool {
 }
 
 func (e *Event) Security() bool {
-	return len(e.privateKey) > 0
+	return len(e.commonPrivateKey) > 0
+}
+
+func (e *Event) withUserAuthenticate() {
+	e.am.RegisterAuthenticateHandlerAction("user", codec.NewAction(codec.ActionId(100), "user-authenticate"), func() codec.DataPtr {
+		return &handlerv1.AuthenticateRequest{}
+	}, func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr) {
+		response := &handlerv1.AuthenticateResponse{}
+		respData = response
+		q := data.(*handlerv1.AuthenticateRequest)
+		// 这里只做解密，后面再做用户查询，以及数据填充
+		if q.Secret != "" {
+			decryptedKey, err := e.rsa.Decrypt([]byte(q.Secret), e.commonPrivateKey, true)
+			if err != nil {
+				response.Error = err.Error()
+				return
+			}
+			response.Key = decryptedKey
+		}
+		response.Type = q.Type
+		response.Id = q.Id
+		response.Master = q.Id
+		response.UserId = q.Id
+
+		return
+	})
 }

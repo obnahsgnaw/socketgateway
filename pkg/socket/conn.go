@@ -40,8 +40,9 @@ type AuthUser struct {
 }
 
 type Authentication struct {
-	Type string
-	Id   string
+	Type   string
+	Id     string
+	Master string
 }
 
 func (s *AuthUser) GetAttr(key, defVal string) string {
