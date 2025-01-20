@@ -12,6 +12,7 @@ import (
 	"github.com/obnahsgnaw/application/service/regCenter"
 	"github.com/obnahsgnaw/goutils/randutil"
 	rpc2 "github.com/obnahsgnaw/rpc"
+	"github.com/obnahsgnaw/rpc/pkg/rpcclient"
 	bindv1 "github.com/obnahsgnaw/socketapi/gen/bind/v1"
 	connv1 "github.com/obnahsgnaw/socketapi/gen/conninfo/v1"
 	groupv1 "github.com/obnahsgnaw/socketapi/gen/group/v1"
@@ -70,6 +71,8 @@ type Server struct {
 	tickInterval    time.Duration
 	authProvider    AuthProvider
 	running         bool
+	watchGwRegInfo  *regCenter.RegInfo // watch gateway
+	watchClient     *rpcclient.Manager
 }
 
 type AuthProvider interface {
@@ -102,6 +105,7 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 		host:            host,
 		app:             app,
 		actManager:      action.NewManager(),
+		watchClient:     rpcclient.NewManager(),
 	}
 	if s.rawServerType == "" {
 		s.addErr(errors.New(s.msg("type not support")))
@@ -141,6 +145,16 @@ func (s *Server) initRegInfo() {
 		Val:       "",
 		Ttl:       s.app.RegTtl(),
 		KeyPreGen: regCenter.ActionRegKeyPrefixGenerator(),
+	}
+	s.watchGwRegInfo = &regCenter.RegInfo{
+		AppId:   s.app.Cluster().Id(),
+		RegType: regtype.Rpc,
+		ServerInfo: regCenter.ServerInfo{
+			Id:      s.rawSocketType.String() + "-gateway",
+			Name:    "",
+			Type:    s.rawServerType.String(),
+			EndType: s.endType.String(),
+		},
 	}
 }
 
@@ -211,7 +225,7 @@ func (s *Server) Run(failedCb func(error)) {
 		NoDelay:   true,
 		Ticker:    s.tickInterval > 0,
 		ReuseAddr: s.reuseAddr,
-	})
+	}, s.watchClient)
 	s.logger.Info("socket server initialized")
 	s.defaultListen()
 	for _, h := range s.actListeners {
@@ -435,21 +449,21 @@ func (s *Server) defaultListen() {
 					if u.Attr == nil {
 						u.Attr = make(map[string]string)
 					}
-					c.Context().Auth(u)
 					uid, _ := u.Attr["user_id"]
+					cidStr, _ := u.Attr["company_id"]
+					cid, _ := strconv.Atoi(cidStr)
 					if uid != c.Context().Authentication().Id {
 						s.Logger().Error(s.msg("auth action request resp error: uid diff of authenticate id", uid, c.Context().Authentication().Id))
 						response.Success = false
 						return
 					}
-					c.Context().Authenticate(&socket.Authentication{
+					s.server.Auth(c, u)
+					s.server.Authenticate(c, &socket.Authentication{
 						Type:   c.Context().Authentication().Type,
 						Id:     uid,
 						Master: uid,
-					})
-					s.server.BindId(c, socket.ConnId{
-						Id:   strconv.Itoa(int(u.Id)),
-						Type: "UID",
+						Cid:    uint32(cid),
+						Uid:    uint32(u.Id),
 					})
 				}
 			}
@@ -515,7 +529,21 @@ func (s *Server) watch(register regCenter.Register) error {
 		return err
 	}
 
-	return nil
+	// watch gateway
+	gwPrefix := s.watchGwRegInfo.Prefix() + "/"
+	return register.Watch(s.app.Context(), gwPrefix, func(key string, val string, isDel bool) {
+		segments := strings.Split(key, "/")
+		host := segments[len(segments)-1]
+		if host != s.rpcServer.Host().String() {
+			if isDel {
+				s.logger.Debug(utils.ToStr("wss gateway [", host, "] leaved"))
+				s.watchClient.Rm("gateway", host)
+			} else {
+				s.logger.Debug(utils.ToStr("wss gateway [", host, "] added"))
+				s.watchClient.Add("gateway", host)
+			}
+		}
+	})
 }
 
 func (s *Server) addErr(err error) {

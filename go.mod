@@ -10,7 +10,7 @@ require (
 	github.com/obnahsgnaw/goutils v0.6.0
 	github.com/obnahsgnaw/http v0.2.10
 	github.com/obnahsgnaw/rpc v0.6.14
-	github.com/obnahsgnaw/socketapi v0.5.11
+	github.com/obnahsgnaw/socketapi v0.6.2
 	github.com/obnahsgnaw/socketutil v0.8.11
 	github.com/panjf2000/gnet/v2 v2.2.9
 	go.uber.org/zap v1.23.0

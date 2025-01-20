@@ -44,7 +44,7 @@ func (e *Event) ProxyInit(c *moc.Conn, _ codec.Name, packedPkg []byte) (respPack
 	c = pm.Sync(c)
 	e.ClearCoder(c)
 	e.ClearCryptoKey(c)
-	c.Context().Authenticate(nil)
+	e.ss.Authenticate(c, nil)
 	_, response, _, keyErr := e.authenticate(c, "", packedPkg)
 	respPackage = []byte(response)
 	if keyErr != nil {

@@ -106,7 +106,7 @@ func (s *Server) Run(ctx context.Context) {
 						fd = s.fdProvider()
 						c = newConn(int(fd), identify, s.broadcastSendAddr, s.l, s.localAddr, addr, socket.NewContext(), func(cc *Conn, ide string) {
 							delete(s.clients, ide)
-							s.onDisconnect(cc, errors.New("closed by xx"))
+							s.onDisconnect(cc, errors.New("closed by server"))
 						})
 						s.clients[identify] = c
 						s.clients[identify] = c

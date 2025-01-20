@@ -58,6 +58,8 @@ func (h *RemoteHandler) Call(rqId, serverHost, gateway, format string, c socket.
 				Type:   target.Type,
 				Id:     target.Id,
 				Master: target.Master,
+				Cid:    target.Cid,
+				Uid:    target.Uid,
 			}
 		}
 		var err error

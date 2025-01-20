@@ -254,7 +254,7 @@ func (m *Manager) Dispatch(c socket.Conn, rqId string, b codec.DataBuilder, acti
 	return
 }
 
-func (m *Manager) Authenticate(c socket.Conn, rqId string, b codec.DataBuilder, tp, id string, secret string) (auth *socket.Authentication, uid string, key []byte, err error) {
+func (m *Manager) Authenticate(c socket.Conn, rqId string, b codec.DataBuilder, tp, id string, secret string) (auth *socket.Authentication, key []byte, err error) {
 	rq := &handlerv1.AuthenticateRequest{
 		Gateway: m.gateway.String(),
 		Fd:      int64(c.Fd()),
@@ -286,8 +286,9 @@ func (m *Manager) Authenticate(c socket.Conn, rqId string, b codec.DataBuilder, 
 		Type:   response.Type,
 		Id:     response.Id,
 		Master: response.Master,
+		Cid:    response.CompanyId,
+		Uid:    response.UserId,
 	}
-	uid = response.UserId
 	key = response.Key
 	return
 }
