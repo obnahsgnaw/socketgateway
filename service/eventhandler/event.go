@@ -65,7 +65,8 @@ type Event struct {
 
 	commonCertForAll bool // 都使用PrivateKey,不使用remote authenticate的解密
 
-	authenticatedCallbacks []func(c socket.Conn)
+	authenticatedBefores   []func(socket.Conn, []byte) []byte
+	authenticatedCallbacks []func(socket.Conn)
 }
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
@@ -376,6 +377,12 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		// 处理proxy
 		if pkg = e.initProxy(pkg); len(pkg) == 0 {
 			return
+		}
+
+		for _, fn := range e.authenticatedBefores {
+			if fn != nil {
+				pkg = fn(c, pkg)
+			}
 		}
 
 		hit = true

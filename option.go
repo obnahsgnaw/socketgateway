@@ -192,3 +192,9 @@ func AuthenticatedCallback(fn ...func(socket.Conn)) Option {
 		s.addEventOption(eventhandler.AuthenticatedCallback(fn...))
 	}
 }
+
+func AuthenticatedBefores(fn ...func(socket.Conn, []byte) []byte) Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.AuthenticatedBefores(fn...))
+	}
+}

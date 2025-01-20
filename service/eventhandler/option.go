@@ -160,3 +160,9 @@ func AuthenticatedCallback(fn ...func(socket.Conn)) Option {
 		event.authenticatedCallbacks = append(event.authenticatedCallbacks, fn...)
 	}
 }
+
+func AuthenticatedBefores(fn ...func(socket.Conn, []byte) []byte) Option {
+	return func(event *Event) {
+		event.authenticatedBefores = append(event.authenticatedBefores, fn...)
+	}
+}
