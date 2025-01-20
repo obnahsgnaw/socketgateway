@@ -154,3 +154,9 @@ func PrivateKeyForAll() Option {
 		event.commonCertForAll = true
 	}
 }
+
+func AuthenticatedCallback(fn ...func(socket.Conn)) Option {
+	return func(event *Event) {
+		event.authenticatedCallbacks = append(event.authenticatedCallbacks, fn...)
+	}
+}
