@@ -82,3 +82,15 @@ func (gw *BindService) UnBindId(_ context.Context, in *bindv1.UnBindIdRequest) (
 	resp = &bindv1.UnBindIdResponse{}
 	return
 }
+
+func (gw *BindService) DisconnectTarget(_ context.Context, in *bindv1.DisconnectTargetRequest) (resp *bindv1.DisconnectTargetResponse, err error) {
+	resp = &bindv1.DisconnectTargetResponse{}
+	if in.Id == "" {
+		return
+	}
+	conn := gw.s().GetAuthenticatedConn(in.Id)
+	if conn != nil {
+		conn.Close()
+	}
+	return
+}

@@ -50,7 +50,9 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 				Id:   in.GetId().Id,
 				Type: in.GetId().Type,
 			})
-			cc = []socket.Conn{c}
+			if c != nil {
+				cc = []socket.Conn{c}
+			}
 		}
 	}
 	if len(cc) == 0 {

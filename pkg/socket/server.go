@@ -2,8 +2,10 @@ package socket
 
 import (
 	"context"
+	"github.com/obnahsgnaw/rpc/pkg/rpcclient"
 	"github.com/obnahsgnaw/socketgateway/pkg/group"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
+	"strconv"
 	"sync"
 )
 
@@ -34,17 +36,19 @@ type Server struct {
 	connections  sync.Map // map[int]Conn
 	connIdBinds  sync.Map // map[string]int
 	relatedBinds sync.Map // map[string][]string
+	watchClient  *rpcclient.Manager
 }
 
 // New return a Server
-func New(ctx context.Context, t sockettype.SocketType, p int, e Engine, event Event, c *Config) *Server {
+func New(ctx context.Context, t sockettype.SocketType, p int, e Engine, event Event, c *Config, watchClient *rpcclient.Manager) *Server {
 	s := &Server{
-		ctx:    ctx,
-		typ:    t,
-		port:   p,
-		engine: e,
-		config: c,
-		groups: group.New(),
+		ctx:         ctx,
+		typ:         t,
+		port:        p,
+		engine:      e,
+		config:      c,
+		groups:      group.New(),
+		watchClient: watchClient,
 	}
 	s.event = newCountedEvent(s, event)
 
@@ -161,6 +165,15 @@ func (s *Server) delConn(c Conn) {
 		c.Context().RangeId(func(id ConnId) {
 			s.connIdBinds.Delete(id.String())
 		})
+		au := c.Context().Authentication()
+		if au != nil {
+			s.UnbindRelate(au.Master, au.Id)
+		}
+		// 退组
+		s.Groups().RangeGroups(func(g *group.Group) bool {
+			g.Leave(c.Fd())
+			return true
+		})
 	}
 }
 
@@ -192,8 +205,68 @@ func (s *Server) GetRelatedConn(master string) []Conn {
 	if v, ok := s.relatedBinds.Load(master); ok {
 		vv := v.([]string)
 		for _, v1 := range vv {
-			cc = append(cc, s.GetIdConn(ConnId{Id: v1, Type: "TARGET"}))
+			c1 := s.GetIdConn(ConnId{Id: v1, Type: "TARGET"})
+			if c1 != nil {
+				cc = append(cc, c1)
+			}
 		}
 	}
 	return cc
+}
+
+func (s *Server) Auth(c Conn, u *AuthUser) {
+	if u != nil {
+		c.Context().auth(u)
+		s.BindId(c, ConnId{
+			Id:   strconv.Itoa(int(u.Id)),
+			Type: "UID",
+		})
+	} else {
+		u1 := c.Context().User()
+		c.Context().auth(u)
+		if u1 != nil {
+			s.UnbindId(c, ConnId{
+				Id:   strconv.Itoa(int(u1.Id)),
+				Type: "UID",
+			})
+		}
+	}
+}
+
+func (s *Server) Authenticate(c Conn, u *Authentication) {
+	if u != nil {
+		c.Context().authenticate(u)
+		s.BindId(c, ConnId{
+			Id:   u.Id,
+			Type: "TARGET",
+		})
+		s.BindRelate(u.Master, u.Id)
+	} else {
+		u1 := c.Context().Authentication()
+		c.Context().authenticate(u)
+		if u1 != nil {
+			s.UnbindId(c, ConnId{
+				Id:   u1.Id,
+				Type: "TARGET",
+			})
+			s.UnbindRelate(u1.Master, u1.Id)
+		}
+	}
+}
+
+func (s *Server) GetAuthenticatedConn(id string) Conn {
+	cc := ConnId{Id: id, Type: "TARGET"}
+	if fd, ok := s.connIdBinds.Load(cc.String()); ok {
+		if c := s.GetFdConn(fd.(int)); c != nil {
+			return c
+		} else {
+			s.connIdBinds.Delete(cc.String())
+			return nil
+		}
+	}
+	return nil
+}
+
+func (s *Server) GwManager() *rpcclient.Manager {
+	return s.watchClient
 }

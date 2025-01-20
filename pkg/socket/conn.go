@@ -43,6 +43,8 @@ type Authentication struct {
 	Type   string
 	Id     string
 	Master string
+	Cid    uint32
+	Uid    uint32
 }
 
 func (s *AuthUser) GetAttr(key, defVal string) string {
@@ -110,7 +112,9 @@ func (c *ConnContext) Ids() map[string]ConnId {
 func (c *ConnContext) IdMap() map[string]string {
 	m := make(map[string]string)
 	for _, id := range c.ids {
-		m[id.Type] = id.Id
+		if id.Type != "TARGET" && id.Type != "UID" { // 减少传输
+			m[id.Type] = id.Id
+		}
 	}
 	return m
 }
@@ -148,7 +152,7 @@ func (c *ConnContext) Upgraded() bool {
 	return c.upgraded
 }
 
-func (c *ConnContext) Auth(u *AuthUser) {
+func (c *ConnContext) auth(u *AuthUser) {
 	c.authUser = u
 }
 
@@ -168,7 +172,7 @@ func (c *ConnContext) Authenticated() bool {
 	return c.authentication != nil
 }
 
-func (c *ConnContext) Authenticate(a *Authentication) {
+func (c *ConnContext) authenticate(a *Authentication) {
 	c.authentication = a
 }
 

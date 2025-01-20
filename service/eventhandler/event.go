@@ -10,8 +10,8 @@ import (
 	"github.com/obnahsgnaw/goutils/security/coder"
 	"github.com/obnahsgnaw/goutils/security/esutil"
 	"github.com/obnahsgnaw/goutils/security/rsautil"
+	bindv1 "github.com/obnahsgnaw/socketapi/gen/bind/v1"
 	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
-	"github.com/obnahsgnaw/socketgateway/pkg/group"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/action"
@@ -20,10 +20,10 @@ import (
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -159,7 +159,7 @@ func (e *Event) OnClose(s *socket.Server, c socket.Conn, err error) {
 	go e.handleClose(s, c, err)
 }
 
-func (e *Event) handleClose(s *socket.Server, c socket.Conn, err error) {
+func (e *Event) handleClose(_ *socket.Server, c socket.Conn, err error) {
 	defer utils.RecoverHandler("on close", func(err, stack string) {
 		if e.logger != nil {
 			e.logger.Error("on close err=" + err + ", stack=" + stack)
@@ -177,11 +177,6 @@ func (e *Event) handleClose(s *socket.Server, c socket.Conn, err error) {
 	}
 	e.log(c, "", "Disconnected, reason="+reason, zapcore.InfoLevel)
 	e.am.HandleClose(c)
-	// 退组
-	s.Groups().RangeGroups(func(g *group.Group) bool {
-		g.Leave(c.Fd())
-		return true
-	})
 }
 
 func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
@@ -405,12 +400,11 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		}
 
 		var keys []byte
-		var uid string
 		secret := string(pkg)
 		if !e.Security() || e.commonCertForAll {
 			secret = ""
 		}
-		if authentication, uid, keys, err = e.am.Authenticate(c, rqId, e.authenticateDataCoder, authentication.Type, authentication.Id, secret); err != nil {
+		if authentication, keys, err = e.am.Authenticate(c, rqId, e.authenticateDataCoder, authentication.Type, authentication.Id, secret); err != nil {
 			response = "222"
 			return
 		}
@@ -456,7 +450,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		// 获取用户
 		var user *socket.AuthUser
 		if e.AuthEnabled() {
-			if uid == "" {
+			if authentication.Uid == 0 {
 				// 非用用户类型必须要uid
 				if authentication.Type != "user" {
 					response = "222"
@@ -465,43 +459,43 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 				}
 			} else {
 				if authentication.Type != "user" {
-					if user, err = e.authProvider.GetIdUser(uid); err != nil {
+					if user, err = e.authProvider.GetIdUser(strconv.Itoa(int(authentication.Uid))); err != nil {
 						response = "222"
 						return
 					}
 				} else {
-					if strings.Contains(uid, " ") { // app + 空格 + token
-						if user, err = e.authProvider.GetAuthedUser(uid); err != nil {
-							response = "222"
-							return
-						}
-						userId, _ := user.Attr["user_id"]
-						authentication.Id = userId
-						authentication.Master = userId
-					} else {
-						// 纯id 需要后续认证
-					}
+					// 纯id 需要后续认证
 				}
 			}
 		} else {
 			user = e.defaultUser
 		}
 
+		// 验证是否已（当前、其他）
+		cc := e.ss.GetAuthenticatedConn(authentication.Id)
+		if cc != nil && cc.Fd() != c.Fd() {
+			e.log(c, rqId, utils.ToStr("authenticate closed exist client"), zapcore.InfoLevel)
+			cc.Close()
+		}
+		for _, gw := range e.ss.GwManager().Get("gateway") {
+			err = e.ss.GwManager().HostCall(e.ctx, gw, 0, "gateway", "gateway", rqId, "", "", func(ctx context.Context, cc *grpc.ClientConn) error {
+				_, err1 := bindv1.NewBindServiceClient(cc).DisconnectTarget(ctx, &bindv1.DisconnectTargetRequest{
+					Id: authentication.Id,
+				})
+				return err1
+			})
+			if err != nil {
+				response = "222"
+				return
+			}
+		}
+
 		e.log(c, rqId, utils.ToStr("authenticate: type=", authentication.Type, ", id=", authentication.Id), zapcore.InfoLevel)
-		c.Context().Authenticate(authentication)
-		e.ss.BindId(c, socket.ConnId{
-			Id:   authentication.Id,
-			Type: "TARGET",
-		})
-		e.ss.BindRelate(authentication.Master, authentication.Id)
+		e.ss.Authenticate(c, authentication)
 		// 用户类型 可以后面进行认证
 		if user != nil {
 			e.log(c, rqId, utils.ToStr("authenticate user=", user.Name), zapcore.InfoLevel)
-			c.Context().Auth(user)
-			e.ss.BindId(c, socket.ConnId{
-				Id:   strconv.Itoa(int(user.Id)),
-				Type: "UID",
-			})
+			e.ss.Auth(c, user)
 		}
 		e.SetCryptoKey(c, key)
 		if len(key) > 0 {
@@ -579,7 +573,7 @@ func (e *Event) CryptoKey(c socket.Conn) []byte {
 }
 
 func (e *Event) CryptoKeyInitialized(c socket.Conn) bool {
-	return connutil.CryptoKeyInitialized(c)
+	return c.Context().Authenticated()
 }
 
 func (e *Event) codecDecode(c socket.Conn, pkg []byte, handler func(pkg []byte)) error {
@@ -779,7 +773,8 @@ func (e *Event) withUserAuthenticate() {
 		response.Type = q.Type
 		response.Id = q.Id
 		response.Master = q.Id
-		response.UserId = q.Id
+		response.CompanyId = 0
+		response.UserId = 0
 
 		return
 	})

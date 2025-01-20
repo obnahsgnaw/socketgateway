@@ -68,7 +68,6 @@ func CoderInitialized(c socket.Conn) bool {
 }
 
 func SetCryptoKey(c socket.Conn, key []byte) {
-	c.Context().SetOptional("cryptKeyInitialized", 1)
 	c.Context().SetOptional("cryptKey", key)
 }
 
@@ -80,13 +79,7 @@ func CryptoKey(c socket.Conn) []byte {
 	return k.([]byte)
 }
 
-func CryptoKeyInitialized(c socket.Conn) bool {
-	_, ok := c.Context().GetOptional("cryptKeyInitialized")
-	return ok
-}
-
 func ClearCryptoKey(c socket.Conn) {
-	c.Context().DelOptional("cryptKeyInitialized")
 	c.Context().DelOptional("cryptKey")
 }
 
