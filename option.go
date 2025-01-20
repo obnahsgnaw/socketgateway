@@ -186,3 +186,9 @@ func PrivateKeyForAll() Option {
 		s.addEventOption(eventhandler.PrivateKeyForAll())
 	}
 }
+
+func AuthenticatedCallback(fn ...func(socket.Conn)) Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.AuthenticatedCallback(fn...))
+	}
+}

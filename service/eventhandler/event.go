@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/obnahsgnaw/application/pkg/utils"
+	"github.com/obnahsgnaw/goutils/runtimeutil"
 	"github.com/obnahsgnaw/goutils/security/coder"
 	"github.com/obnahsgnaw/goutils/security/esutil"
 	"github.com/obnahsgnaw/goutils/security/rsautil"
@@ -63,6 +64,8 @@ type Event struct {
 	authenticateDataCoder codec.DataBuilder
 
 	commonCertForAll bool // 都使用PrivateKey,不使用remote authenticate的解密
+
+	authenticatedCallbacks []func(c socket.Conn)
 }
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
@@ -365,6 +368,10 @@ func (e *Event) initCodec(c socket.Conn, rqId string, name codec.Name) {
 
 // 类型@标识@数据类型::RSA{es-key+10位时间戳} base64-stdEncode
 func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, response string, initPackage []byte, err error) {
+	defer runtimeutil.HandleRecover(func(errMsg, stack string) {
+		e.log(c, rqId, utils.ToStr("authenticate: err=", errMsg), zapcore.ErrorLevel)
+		response = "222"
+	})
 	if !e.CryptoKeyInitialized(c) {
 		// 处理proxy
 		if pkg = e.initProxy(pkg); len(pkg) == 0 {
@@ -502,6 +509,11 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			e.log(c, rqId, "authenticate with security", zapcore.InfoLevel)
 		}
 		e.initCodec(c, rqId, codeType)
+		for _, fn := range e.authenticatedCallbacks {
+			if fn != nil {
+				fn(c)
+			}
+		}
 		return
 	}
 	initPackage = pkg
