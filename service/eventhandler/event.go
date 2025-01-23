@@ -485,22 +485,24 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			user = e.defaultUser
 		}
 
-		// 验证是否已（当前、其他）
-		cc := e.ss.GetAuthenticatedConn(authentication.Id)
-		if cc != nil && cc.Fd() != c.Fd() {
-			e.log(c, rqId, utils.ToStr("authenticate closed exist client"), zapcore.InfoLevel)
-			cc.Close()
-		}
-		for _, gw := range e.ss.GwManager().Get("gateway") {
-			err = e.ss.GwManager().HostCall(e.ctx, gw, 0, "gateway", "gateway", rqId, "", "", func(ctx context.Context, cc *grpc.ClientConn) error {
-				_, err1 := bindv1.NewBindServiceClient(cc).DisconnectTarget(ctx, &bindv1.DisconnectTargetRequest{
-					Id: authentication.Id,
+		if authentication.Type != "user" {
+			// 验证是否已（当前、其他）
+			cc := e.ss.GetAuthenticatedConn(authentication.Id)
+			for _, ccc := range cc {
+				e.log(c, rqId, utils.ToStr("authenticate closed exist client"), zapcore.InfoLevel)
+				ccc.Close()
+			}
+			for _, gw := range e.ss.GwManager().Get("gateway") {
+				err = e.ss.GwManager().HostCall(e.ctx, gw, 0, "gateway", "gateway", rqId, "", "", func(ctx context.Context, cc *grpc.ClientConn) error {
+					_, err1 := bindv1.NewBindServiceClient(cc).DisconnectTarget(ctx, &bindv1.DisconnectTargetRequest{
+						Id: authentication.Id,
+					})
+					return err1
 				})
-				return err1
-			})
-			if err != nil {
-				response = "222"
-				return
+				if err != nil {
+					response = "222"
+					return
+				}
 			}
 		}
 

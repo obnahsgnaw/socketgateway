@@ -46,13 +46,10 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 		if in.GetId().Type == "TARGET" {
 			cc = gw.s().GetRelatedConn(in.GetId().Id)
 		} else {
-			c := gw.s().GetIdConn(socket.ConnId{
+			cc = gw.s().GetIdConn(socket.ConnId{
 				Id:   in.GetId().Id,
 				Type: in.GetId().Type,
 			})
-			if c != nil {
-				cc = []socket.Conn{c}
-			}
 		}
 	}
 	if len(cc) == 0 {

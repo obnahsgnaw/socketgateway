@@ -58,7 +58,7 @@ func (gw *BindService) BindExist(_ context.Context, in *bindv1.BindExistRequest)
 		Id:   in.Id.Id,
 		Type: in.Id.Typ,
 	})
-	resp = &bindv1.BindExistResponse{Exist: conn != nil}
+	resp = &bindv1.BindExistResponse{Exist: len(conn) > 0}
 	return
 }
 
@@ -89,8 +89,8 @@ func (gw *BindService) DisconnectTarget(_ context.Context, in *bindv1.Disconnect
 		return
 	}
 	conn := gw.s().GetAuthenticatedConn(in.Id)
-	if conn != nil {
-		conn.Close()
+	for _, c := range conn {
+		c.Close()
 	}
 	return
 }
