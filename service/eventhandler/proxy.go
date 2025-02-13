@@ -64,6 +64,10 @@ func (e *Event) Proxy(c *moc.Conn, rqId string, packedPkg []byte) (rqAction, res
 		respPackage = []byte("222")
 		return
 	}
+	// raw
+	if e.handleRaw(c, rqId, packedPkg) {
+		return
+	}
 	// Process message packets
 	rqAction, respAction, rqData, respData, respPackage, err = e.handleMessage(c, rqId, packedPkg)
 	if len(respPackage) > 0 {

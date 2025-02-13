@@ -216,16 +216,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	err = e.codecDecode(c, initPackage, func(packedPkg []byte) {
 		e.log(c, rqId, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
 		// raw
-		if c.Context().Authentication().Protocol != "" {
-			if respData, dispatchErr := e.am.Raw(c, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, packedPkg, 0); dispatchErr != nil {
-				e.log(c, rqId, "package raw dispatch failed,err="+dispatchErr.Error(), zapcore.ErrorLevel)
-			} else {
-				if len(respData) > 0 {
-					if err1 := e.write(c, respData); err1 != nil {
-						e.log(c, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
-					}
-				}
-			}
+		if e.handleRaw(c, rqId, packedPkg) {
 			return
 		}
 		rqAction, respAction, rqData, respData, respPackage, err1 := e.handleMessage(c, rqId, packedPkg)
@@ -272,6 +263,22 @@ func (e *Event) OnShutdown(s *socket.Server) {
 	if e.logger != nil {
 		e.logger.Info(utils.ToStr(s.Type().String(), "service[", strconv.Itoa(s.Port()), "] down"))
 	}
+}
+
+func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
+	if c.Context().Authentication().Protocol != "" {
+		if respData, dispatchErr := e.am.Raw(c, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, packedPkg, 0); dispatchErr != nil {
+			e.log(c, rqId, "package raw dispatch failed,err="+dispatchErr.Error(), zapcore.ErrorLevel)
+		} else {
+			if len(respData) > 0 {
+				if err1 := e.write(c, respData); err1 != nil {
+					e.log(c, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
+				}
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // HandleMessage handle message
