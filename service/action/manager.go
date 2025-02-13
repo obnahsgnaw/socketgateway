@@ -19,7 +19,8 @@ type Manager struct {
 	actions             sync.Map // action-id, [server-host]action-name
 	servers             sync.Map // server-host => [action-id]action-name
 	closeAction         codec.ActionId
-	authenticateActions sync.Map // map[string]codec.ActionId
+	authenticateActions sync.Map // map[authenticateType]codec.ActionId
+	rawActions          sync.Map // map[protocolType]codec.ActionId
 	remoteHandler       RemoteHandler
 	gateway             url.Host
 }
@@ -83,14 +84,11 @@ func (m *Manager) closeTask(c socket.Conn, gw string, wg *sync.WaitGroup) func()
 // RegisterHandlerAction register an action with handler
 func (m *Manager) RegisterHandlerAction(action codec.Action, structure DataStructure, handler Handler) {
 	m.handlers.Store(action.Id, actionHandler{Action: action, structure: structure, Handler: handler})
-}
-
-func (m *Manager) RegisterAuthenticateHandlerAction(tp string, action codec.Action, structure DataStructure, handler Handler) {
-	m.RegisterHandlerAction(action, structure, handler)
-	m.authenticateActions.Store(tp, action.Id)
+	m.initType(action)
 }
 
 // RegisterRemoteAction register an action with server host
+// action.Name authenticate:xxx,raw:xxx for customer action
 func (m *Manager) RegisterRemoteAction(action codec.Action, serverHost string, flbNum string) {
 	var servers serverSet
 	var actions actionSet
@@ -112,13 +110,24 @@ func (m *Manager) RegisterRemoteAction(action codec.Action, serverHost string, f
 	}
 	actions[action.Id] = action.Name
 	m.servers.Store(serverHost, actions)
+	m.initType(action)
 
 	return
 }
 
-func (m *Manager) RegisterAuthenticateRemoteAction(tp string, action codec.Action, serverHost string, flbNum string) {
-	m.RegisterRemoteAction(action, serverHost, flbNum)
-	m.authenticateActions.Store(tp, action.Id)
+func (m *Manager) initType(action codec.Action) {
+	if strings.Contains(action.Name, ":") {
+		valSegments := strings.Split(action.Name, ":")
+		switch valSegments[0] {
+		case "authenticate":
+			m.authenticateActions.Store(valSegments[1], action.Id)
+			break
+		case "raw":
+			m.rawActions.Store(valSegments[1], action.Id)
+			break
+		default:
+		}
+	}
 }
 
 // UnregisterRemoteAction unregister a server action
@@ -283,12 +292,35 @@ func (m *Manager) Authenticate(c socket.Conn, rqId string, b codec.DataBuilder, 
 		return
 	}
 	auth = &socket.Authentication{
-		Type:   response.Type,
-		Id:     response.Id,
-		Master: response.Master,
-		Cid:    response.CompanyId,
-		Uid:    response.UserId,
+		Type:     response.Type,
+		Id:       response.Id,
+		Master:   response.Master,
+		Cid:      response.CompanyId,
+		Uid:      response.UserId,
+		Protocol: response.Protocol,
 	}
 	key = response.Key
+	return
+}
+
+func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string, actionData []byte, actionId uint32) (respData []byte, err error) {
+	rq := &handlerv1.RawRequest{ActionId: actionId, Data: actionData}
+	var bb []byte
+	if bb, err = b.Pack(rq); err != nil {
+		return
+	}
+	aid, ok := m.rawActions.Load(tp)
+	if !ok {
+		err = errors.New("raw type no handler")
+		return
+	}
+	if _, bb, err = m.Dispatch(c, rqId, b, aid.(codec.ActionId), bb); err != nil {
+		return
+	}
+	var response handlerv1.RawResponse
+	if err = b.Unpack(bb, &response); err != nil {
+		return
+	}
+	respData = response.Data
 	return
 }

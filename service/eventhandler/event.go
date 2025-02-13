@@ -60,8 +60,8 @@ type Event struct {
 	dataCoder     codec.DataBuilder
 	packageCoder  PackageBuilder
 
-	authProvider          AuthProvider
-	authenticateDataCoder codec.DataBuilder
+	authProvider      AuthProvider
+	internalDataCoder codec.DataBuilder // 内部协议
 
 	commonCertForAll bool // 都使用PrivateKey,不使用remote authenticate的解密
 
@@ -83,18 +83,18 @@ type AuthProvider interface {
 
 func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, options ...Option) *Event {
 	s := &Event{
-		ctx:                   ctx,
-		am:                    m,
-		st:                    st,
-		tickHandlers:          make(map[string]TickHandler),
-		rsa:                   rsautil.New(rsautil.PKCS1Public(), rsautil.PKCS1Private(), rsautil.SignHash(crypto.SHA256), rsautil.Encoder(coder.B64StdEncoding)),
-		es:                    esutil.New(esutil.Aes256, esutil.CbcMode, esutil.Encoder(coder.B64StdEncoding)),
-		esTp:                  esutil.Aes256,
-		esMode:                esutil.CbcMode,
-		secEncoder:            coder.B64StdEncoding,
-		secTtl:                60,
-		defDataType:           codec.Json,
-		authenticateDataCoder: codec.NewProtobufDataBuilder(),
+		ctx:               ctx,
+		am:                m,
+		st:                st,
+		tickHandlers:      make(map[string]TickHandler),
+		rsa:               rsautil.New(rsautil.PKCS1Public(), rsautil.PKCS1Private(), rsautil.SignHash(crypto.SHA256), rsautil.Encoder(coder.B64StdEncoding)),
+		es:                esutil.New(esutil.Aes256, esutil.CbcMode, esutil.Encoder(coder.B64StdEncoding)),
+		esTp:              esutil.Aes256,
+		esMode:            esutil.CbcMode,
+		secEncoder:        coder.B64StdEncoding,
+		secTtl:            60,
+		defDataType:       codec.Json,
+		internalDataCoder: codec.NewProtobufDataBuilder(),
 	}
 	toData := func(p *codec.PKG) codec.DataPtr {
 		if p == nil {
@@ -215,6 +215,19 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	// Unpacking a protocol package
 	err = e.codecDecode(c, initPackage, func(packedPkg []byte) {
 		e.log(c, rqId, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
+		// raw
+		if c.Context().Authentication().Protocol != "" {
+			if respData, dispatchErr := e.am.Raw(c, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, packedPkg, 0); dispatchErr != nil {
+				e.log(c, rqId, "package raw dispatch failed,err="+dispatchErr.Error(), zapcore.ErrorLevel)
+			} else {
+				if len(respData) > 0 {
+					if err1 := e.write(c, respData); err1 != nil {
+						e.log(c, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
+					}
+				}
+			}
+			return
+		}
 		rqAction, respAction, rqData, respData, respPackage, err1 := e.handleMessage(c, rqId, packedPkg)
 		if err1 != nil {
 			e.log(c, rqId, "package handled: request action="+rqAction.String()+err1.Error(), zapcore.WarnLevel)
@@ -418,7 +431,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		if !e.Security() || e.commonCertForAll {
 			secret = ""
 		}
-		if authentication, keys, err = e.am.Authenticate(c, rqId, e.authenticateDataCoder, authentication.Type, authentication.Id, secret); err != nil {
+		if authentication, keys, err = e.am.Authenticate(c, rqId, e.internalDataCoder, authentication.Type, authentication.Id, secret); err != nil {
 			response = "222"
 			return
 		}
@@ -776,7 +789,7 @@ func (e *Event) Security() bool {
 }
 
 func (e *Event) withUserAuthenticate() {
-	e.am.RegisterAuthenticateHandlerAction("user", codec.NewAction(codec.ActionId(100), "user-authenticate"), func() codec.DataPtr {
+	e.am.RegisterHandlerAction(codec.NewAction(codec.ActionId(100), "authenticate:user"), func() codec.DataPtr {
 		return &handlerv1.AuthenticateRequest{}
 	}, func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr) {
 		response := &handlerv1.AuthenticateResponse{}
@@ -799,4 +812,12 @@ func (e *Event) withUserAuthenticate() {
 
 		return
 	})
+}
+
+func (e *Event) ActionManager() *action.Manager {
+	return e.am
+}
+
+func (e *Event) InternalDataCoder() codec.DataBuilder {
+	return e.internalDataCoder
 }
