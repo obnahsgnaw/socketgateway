@@ -489,15 +489,7 @@ func (s *Server) watch(register regCenter.Register) error {
 		id := segments[len(segments)-3]
 		host := segments[len(segments)-2]
 		actionStr := segments[len(segments)-1]
-		authenticateType := ""
-		var actionId int
-		if strings.Contains(actionStr, ":") {
-			segs := strings.Split(actionStr, ":")
-			authenticateType = segs[0]
-			actionId, _ = strconv.Atoi(segs[1])
-		} else {
-			actionId, _ = strconv.Atoi(actionStr)
-		}
+		actionId, _ := strconv.Atoi(actionStr)
 		idSegments := strings.Split(id, "-")
 		moduleName := idSegments[0]
 		keyName := idSegments[1]
@@ -512,17 +504,10 @@ func (s *Server) watch(register regCenter.Register) error {
 				val = valNum[0]
 				flbNum = valNum[1]
 			}
-			if authenticateType != "" {
-				s.actManager.RegisterAuthenticateRemoteAction(authenticateType, codec.Action{
-					Id:   codec.ActionId(actionId),
-					Name: val,
-				}, host, flbNum)
-			} else {
-				s.actManager.RegisterRemoteAction(codec.Action{
-					Id:   codec.ActionId(actionId),
-					Name: val,
-				}, host, flbNum)
-			}
+			s.actManager.RegisterRemoteAction(codec.Action{
+				Id:   codec.ActionId(actionId),
+				Name: val,
+			}, host, flbNum)
 		}
 	})
 	if err != nil {

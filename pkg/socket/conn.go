@@ -2,6 +2,7 @@ package socket
 
 import (
 	"net"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -39,19 +40,51 @@ type AuthUser struct {
 	Attr map[string]string
 }
 
-type Authentication struct {
-	Type   string
-	Id     string
-	Master string
-	Cid    uint32
-	Uid    uint32
-}
-
 func (s *AuthUser) GetAttr(key, defVal string) string {
 	if v, ok := s.Attr[key]; ok {
 		return v
 	}
 	return defVal
+}
+
+func (s *AuthUser) Uid() uint {
+	return s.Id
+}
+
+func (s *AuthUser) Uno() string {
+	return s.GetAttr("user_id", "")
+}
+
+func (s *AuthUser) Cid() uint {
+	v, _ := strconv.Atoi(s.GetAttr("company_id", "0"))
+	return uint(v)
+}
+
+func (s *AuthUser) Cno() string {
+	return s.GetAttr("company_no", "")
+}
+
+func (s *AuthUser) CProject() string {
+	return s.GetAttr("company_project", "")
+}
+
+func (s *AuthUser) COid() uint {
+	v, _ := strconv.Atoi(s.GetAttr("company_organization_id", "0"))
+	return uint(v)
+}
+
+func (s *AuthUser) Oid() uint {
+	v, _ := strconv.Atoi(s.GetAttr("organization_id", "0"))
+	return uint(v)
+}
+
+type Authentication struct {
+	Type     string
+	Id       string
+	Master   string
+	Cid      uint32
+	Uid      uint32
+	Protocol string
 }
 
 func (b ConnId) String() string {

@@ -55,11 +55,12 @@ func (h *RemoteHandler) Call(rqId, serverHost, gateway, format string, c socket.
 		target := c.Context().Authentication()
 		if target != nil {
 			req.Target = &handlerv1.HandleRequest_Target{
-				Type:   target.Type,
-				Id:     target.Id,
-				Master: target.Master,
-				Cid:    target.Cid,
-				Uid:    target.Uid,
+				Type:     target.Type,
+				Id:       target.Id,
+				Master:   target.Master,
+				Cid:      target.Cid,
+				Uid:      target.Uid,
+				Protocol: target.Protocol,
 			}
 		}
 		var err error

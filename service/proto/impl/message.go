@@ -61,10 +61,16 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 	for _, c := range cc {
 		coderName := connutil.CoderName(c)
 		var msg []byte
-		if coderName == codec.Proto {
-			msg = in.PbMessage
+		if c.Context().Authentication().Protocol != "" {
+			if msg, lastErr = gw.e().ActionManager().Raw(c, rqId, gw.e().InternalDataCoder(), c.Context().Authentication().Protocol, in.PbMessage, in.ActionId); lastErr != nil {
+				continue
+			}
 		} else {
-			msg = in.JsonMessage
+			if coderName == codec.Proto {
+				msg = in.PbMessage
+			} else {
+				msg = in.JsonMessage
+			}
 		}
 		if err = gw.e().Send(c, rqId, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
 			lastErr = status.New(codes.Internal, "send message failed, err="+err.Error()).Err()
