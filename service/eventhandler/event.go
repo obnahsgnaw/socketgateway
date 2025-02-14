@@ -67,6 +67,8 @@ type Event struct {
 
 	authenticatedBefores   []func(socket.Conn, []byte) []byte
 	authenticatedCallbacks []func(socket.Conn)
+
+	withoutWssDftUserAuthenticate bool
 }
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
@@ -122,7 +124,7 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 	s.codedProvider = codec.NewDbp()
 	s.With(options...)
 	s.AddTicker("authenticate-ticker", authenticateTicker(time.Second*10))
-	if s.st.IsWss() {
+	if s.st.IsWss() && !s.withoutWssDftUserAuthenticate {
 		s.withUserAuthenticate()
 	}
 
