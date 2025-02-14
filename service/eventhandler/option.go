@@ -166,3 +166,9 @@ func AuthenticatedBefores(fn ...func(socket.Conn, []byte) []byte) Option {
 		event.authenticatedBefores = append(event.authenticatedBefores, fn...)
 	}
 }
+
+func WithoutWssDftUserAuthenticate() Option {
+	return func(event *Event) {
+		event.withoutWssDftUserAuthenticate = true
+	}
+}
