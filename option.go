@@ -204,3 +204,12 @@ func WithoutWssDftUserAuthenticate() Option {
 		s.addEventOption(eventhandler.WithoutWssDftUserAuthenticate())
 	}
 }
+
+func Name(subId, name string) Option {
+	return func(s *Server) {
+		if subId != "" && name != "" {
+			s.id = "gateway-" + subId
+			s.name = name
+		}
+	}
+}
