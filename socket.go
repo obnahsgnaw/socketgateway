@@ -152,7 +152,7 @@ func (s *Server) initRegInfo() {
 		ServerInfo: regCenter.ServerInfo{
 			Id:      s.rawSocketType.String() + "-gateway",
 			Name:    "",
-			Type:    s.rawServerType.String(),
+			Type:    s.proxyServerType.String(),
 			EndType: s.endType.String(),
 		},
 	}
