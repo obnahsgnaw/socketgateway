@@ -440,13 +440,18 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		if !e.Security() || e.commonCertForAll {
 			secret = ""
 		}
+		noCert := false
 		if authentication, keys, err = e.am.Authenticate(c, rqId, e.internalDataCoder, authentication.Type, authentication.Id, secret); err != nil {
-			response = "222"
-			return
+			if err.Error() == "NO_CERT" {
+				noCert = true
+			} else {
+				response = "222"
+				return
+			}
 		}
 
 		var key []byte
-		if e.Security() {
+		if e.Security() && !noCert {
 			if e.commonCertForAll {
 				keys, err = e.rsa.Decrypt(pkg, e.commonPrivateKey, true)
 				if err != nil {
