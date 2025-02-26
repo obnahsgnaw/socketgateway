@@ -442,16 +442,12 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		}
 		noCert := false
 		if authentication, keys, err = e.am.Authenticate(c, rqId, e.internalDataCoder, authentication.Type, authentication.Id, secret); err != nil {
-			if err.Error() == "NO_CERT" {
-				noCert = true
-			} else {
-				response = "222"
-				return
-			}
-		}
-		if authentication == nil {
 			response = "222"
 			return
+		}
+		if string(keys) == "NO_CERT" {
+			noCert = true
+			keys = nil
 		}
 
 		var key []byte
