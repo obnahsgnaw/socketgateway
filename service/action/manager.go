@@ -288,8 +288,16 @@ func (m *Manager) Authenticate(c socket.Conn, rqId string, b codec.DataBuilder, 
 		return
 	}
 	if response.Error != "" {
-		err = errors.New(response.Error)
-		return
+		if response.Error == "NO_CERT" {
+			response.Key = []byte("NO_CERT")
+		} else {
+			err = errors.New(response.Error)
+			return
+		}
+	} else {
+		if string(response.Key) == "NO_CERT" {
+			response.Key = nil
+		}
 	}
 	auth = &socket.Authentication{
 		Type:     response.Type,
