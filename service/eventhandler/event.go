@@ -449,6 +449,10 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 				return
 			}
 		}
+		if authentication == nil {
+			response = "222"
+			return
+		}
 
 		var key []byte
 		if e.Security() && !noCert {
