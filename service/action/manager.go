@@ -306,6 +306,7 @@ func (m *Manager) Authenticate(c socket.Conn, rqId string, b codec.DataBuilder, 
 func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string, actionData []byte, actionId uint32) (respData []byte, err error) {
 	rq := &handlerv1.RawRequest{ActionId: actionId, Data: actionData}
 	var bb []byte
+	var respAction codec.Action
 	if bb, err = b.Pack(rq); err != nil {
 		return
 	}
@@ -314,13 +315,26 @@ func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string
 		err = errors.New("raw type no handler")
 		return
 	}
-	if _, bb, err = m.Dispatch(c, rqId, b, aid.(codec.ActionId), bb); err != nil {
+	if respAction, bb, err = m.Dispatch(c, rqId, b, aid.(codec.ActionId), bb); err != nil {
 		return
 	}
 	var response handlerv1.RawResponse
 	if err = b.Unpack(bb, &response); err != nil {
 		return
 	}
-	respData = response.Data
+	// in trans
+	if actionId == 0 && respAction.Id > 0 {
+		// dispatch transfer in
+		if respAction, bb, err = m.Dispatch(c, rqId, b, aid.(codec.ActionId), bb); err != nil {
+			return
+		}
+		// trans out
+		if respAction.Id > 0 && len(bb) > 0 {
+			respData, err = m.Raw(c, rqId, b, tp, bb, uint32(respAction.Id))
+			return
+		}
+	} else {
+		respData = response.Data
+	}
 	return
 }
