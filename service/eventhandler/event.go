@@ -17,6 +17,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/action"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
+	"github.com/obnahsgnaw/socketgateway/service/manage"
 	gatewayv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/gateway/v1"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
@@ -25,6 +26,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -69,6 +71,8 @@ type Event struct {
 	authenticatedCallbacks []func(socket.Conn)
 
 	withoutWssDftUserAuthenticate bool
+
+	trigger *manage.Trigger
 }
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
@@ -152,6 +156,10 @@ func (e *Event) OnOpen(_ *socket.Server, c socket.Conn) {
 		}
 	})
 
+	if e.trigger != nil {
+		e.trigger.ConnectionJoin(c)
+	}
+
 	rqId := utils.GenLocalId("rq")
 	e.log(c, rqId, "Connected", zapcore.InfoLevel)
 	if err := e.openIntercept(); err != nil {
@@ -171,6 +179,11 @@ func (e *Event) handleClose(_ *socket.Server, c socket.Conn, err error) {
 			e.logger.Error("on close err=" + err + ", stack=" + stack)
 		}
 	})
+	defer func() {
+		if e.trigger != nil {
+			e.trigger.ConnectionLeave(c)
+		}
+	}()
 
 	reason := ""
 	if err != nil {
@@ -186,15 +199,20 @@ func (e *Event) handleClose(_ *socket.Server, c socket.Conn, err error) {
 }
 
 func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
+	var rawPkg []byte
+	var err error
 	defer utils.RecoverHandler("on traffic", func(err, stack string) {
 		if e.logger != nil {
 			e.logger.Error(" on traffic err=" + err + ", stack=" + stack)
+		}
+		if e.trigger != nil {
+			e.trigger.ConnectionReceivedMessage(c, "error", "handle message failed:"+err, rawPkg)
 		}
 	})
 
 	rqId := utils.GenLocalId("rq")
 	// Read the data
-	rawPkg, err := c.Read()
+	rawPkg, err = c.Read()
 	if err != nil {
 		e.log(c, rqId, "read failed, err="+err.Error(), zapcore.WarnLevel)
 		return
@@ -366,6 +384,19 @@ func (e *Event) log(c socket.Conn, rqId, msg string, l zapcore.Level, data ...za
 	} else {
 		e.logger.Log(l, msg, data...)
 	}
+	if e.trigger != nil {
+		var pkg []byte
+		for _, d := range data {
+			if d.Key == "package" && d.Type == zapcore.ByteStringType {
+				pkg = d.Interface.([]byte)
+			}
+		}
+		if strings.HasSuffix(msg, "send") || strings.HasSuffix(msg, "sent") {
+			e.trigger.ConnectionSentMessage(c, l.String(), msg, pkg)
+		} else {
+			e.trigger.ConnectionReceivedMessage(c, l.String(), msg, pkg)
+		}
+	}
 }
 
 func (e *Event) WatchLog(watcher LogWatcher) {
@@ -406,6 +437,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 				pkg = fn(c, pkg)
 			}
 		}
+		e.log(c, rqId, "authenticate start", zapcore.InfoLevel, zap.ByteString("package", pkg))
 
 		hit = true
 		var notAuthenticatePackage bool
@@ -768,11 +800,11 @@ func (e *Event) write(c socket.Conn, data []byte) (err error) {
 // Send Sends data that the packet has already encoded，It is mainly used to send encoded data sent by a handler
 func (e *Event) Send(c socket.Conn, rqId string, a codec.Action, data []byte) (err error) {
 	if data, err = e.pack(c, a, data); err != nil {
-		e.log(c, rqId, "pack action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("pkg", data))
+		e.log(c, rqId, "send action pack failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("package", data))
 		return
 	}
 	if err = e.write(c, data); err != nil {
-		e.log(c, rqId, "send action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("pkg", data))
+		e.log(c, rqId, "send action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("package", data))
 	} else {
 		e.log(c, "", "sent action["+a.String()+"]", zapcore.InfoLevel)
 	}
@@ -783,11 +815,11 @@ func (e *Event) Send(c socket.Conn, rqId string, a codec.Action, data []byte) (e
 func (e *Event) SendAction(c socket.Conn, a codec.Action, data codec.DataPtr) (err error) {
 	var packData []byte
 	if packData, err = e.packRaw(c, a, data); err != nil {
-		e.log(c, "", "pack action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.Any("pkg", data))
+		e.log(c, "", "send action pack failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.Any("package", data))
 		return
 	}
 	if err = e.write(c, packData); err != nil {
-		e.log(c, "", "send action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("pkg", packData))
+		e.log(c, "", "send action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("package", packData))
 	} else {
 		e.log(c, "", "sent action["+a.String()+"]", zapcore.InfoLevel)
 	}
