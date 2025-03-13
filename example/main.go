@@ -14,6 +14,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/moc"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
+	"github.com/obnahsgnaw/socketgateway/service/manage"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -115,6 +116,16 @@ UPVJ6NMli2MBL5Noj60dDNcNbKMS3D5yB2HxFf7PxEq+
 		}
 	})
 
+	s.Manager().ConnectionsListen(func(c *manage.Connection, b bool) {
+		if b {
+			log.Println("MANAGER>>>", c.Fd, " connected")
+		} else {
+			log.Println("MANAGER>>>", c.Fd, " disconnected")
+		}
+	})
+	s.Manager().MessagesListen(func(message *manage.Message) {
+		log.Println("MANAGER>>>", message.Fd, " ", message.Level, " ", message.Desc, string(message.Package))
+	})
 	app.AddServer(s)
 	app.Run(func(err error) {
 		panic(err)

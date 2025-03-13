@@ -4,6 +4,7 @@ import (
 	"github.com/obnahsgnaw/goutils/security/coder"
 	"github.com/obnahsgnaw/goutils/security/esutil"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/service/manage"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"time"
@@ -170,5 +171,11 @@ func AuthenticatedBefores(fn ...func(socket.Conn, []byte) []byte) Option {
 func WithoutWssDftUserAuthenticate() Option {
 	return func(event *Event) {
 		event.withoutWssDftUserAuthenticate = true
+	}
+}
+
+func Manage(trigger *manage.Trigger) Option {
+	return func(event *Event) {
+		event.trigger = trigger
 	}
 }

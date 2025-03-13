@@ -24,6 +24,7 @@ import (
 	"github.com/obnahsgnaw/socketgateway/service/action"
 	"github.com/obnahsgnaw/socketgateway/service/doc"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
+	"github.com/obnahsgnaw/socketgateway/service/manage"
 	gatewayv1 "github.com/obnahsgnaw/socketgateway/service/proto/gen/gateway/v1"
 	"github.com/obnahsgnaw/socketgateway/service/proto/impl"
 	"github.com/obnahsgnaw/socketutil/codec"
@@ -73,6 +74,8 @@ type Server struct {
 	running         bool
 	watchGwRegInfo  *regCenter.RegInfo // watch gateway
 	watchClient     *rpcclient.Manager
+	manager         *manage.Manager
+	managerTrigger  *manage.Trigger
 }
 
 type AuthProvider interface {
@@ -115,6 +118,23 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 	s.addErr(err)
 	s.With(options...)
 	s.initRegInfo()
+	s.manager = manage.New(s.rawServerType.String(), s.server, &manage.GwConfig{ // TODO
+		Port:              0,
+		RpcPort:           0,
+		DocDisable:        false,
+		KeepaliveInterval: 0,
+		AuthCheckInterval: 0,
+		HeartbeatInterval: 0,
+		TickInterval:      0,
+		Security:          false,
+		SecurityType:      "",
+		SecurityEncoder:   "",
+		SecurityEncode:    false,
+	}, func(c socket.Conn, act codec.Action, pkg []byte) error {
+		return s.eventHandler.Send(c, "", act, pkg)
+	})
+	s.managerTrigger = manage.NewTrigger(s.manager)
+
 	return s
 }
 
@@ -218,6 +238,7 @@ func (s *Server) Run(failedCb func(error)) {
 		s.logger.Info("socket engine initialize(customer)")
 	}
 	s.addEventOption(eventhandler.Logger(s.logger))
+	s.addEventOption(eventhandler.Manage(s.managerTrigger))
 	s.eventHandler = eventhandler.New(s.app.Context(), s.actManager, s.rawSocketType, s.eo...)
 	s.server = socket.New(s.app.Context(), s.rawSocketType, s.host.Port, s.engine, s.eventHandler, &socket.Config{
 		MultiCore: true,
@@ -553,4 +574,12 @@ func (s *Server) AuthEnabled() bool {
 
 func (s *Server) Security() bool {
 	return s.eventHandler.Security()
+}
+
+func (s *Server) Host() url.Host {
+	return s.host
+}
+
+func (s *Server) Manager() *manage.Manager {
+	return s.manager
 }
