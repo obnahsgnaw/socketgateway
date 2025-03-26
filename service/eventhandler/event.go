@@ -287,12 +287,22 @@ func (e *Event) OnShutdown(s *socket.Server) {
 
 func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 	if c.Context().Authentication().Protocol != "" {
-		if respData, dispatchErr := e.am.Raw(c, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, packedPkg, 0); dispatchErr != nil {
+		decryptedData, decErr := e.decrypt(c, packedPkg)
+		if decErr != nil {
+			e.log(c, rqId, "decrypt data failed, err="+decErr.Error(), zapcore.ErrorLevel)
+			return true
+		}
+		if respData, dispatchErr := e.am.Raw(c, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, decryptedData, 0); dispatchErr != nil {
 			e.log(c, rqId, "package raw dispatch failed,err="+dispatchErr.Error(), zapcore.ErrorLevel)
 		} else {
 			if len(respData) > 0 {
-				if err1 := e.write(c, respData); err1 != nil {
-					e.log(c, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
+				encryptedDaa, err := e.encrypt(c, respData)
+				if err != nil {
+					e.log(c, rqId, "data encrypt failed"+err.Error(), zapcore.ErrorLevel)
+				} else {
+					if err1 := e.write(c, encryptedDaa); err1 != nil {
+						e.log(c, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
+					}
 				}
 			}
 		}
