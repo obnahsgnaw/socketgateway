@@ -5,11 +5,14 @@ import (
 	"github.com/obnahsgnaw/application/endtype"
 	"github.com/obnahsgnaw/application/pkg/logging/logger"
 	"github.com/obnahsgnaw/application/pkg/url"
+	"github.com/obnahsgnaw/application/service/regCenter"
 	"github.com/obnahsgnaw/http"
 	"github.com/obnahsgnaw/http/engine"
 	rpc2 "github.com/obnahsgnaw/rpc"
 	"github.com/obnahsgnaw/socketgateway"
+	mqtt2 "github.com/obnahsgnaw/socketgateway/pkg/mqtt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/custom/mqtt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/manage"
 	"go.uber.org/zap"
@@ -20,11 +23,13 @@ import (
 )
 
 func main() {
+	reg, _ := regCenter.NewEtcdRegister([]string{"127.0.0.1:2379"}, time.Second*5)
 	app := application.New(
 		"demo",
 		application.Debug(func() bool {
 			return true
 		}),
+		application.Register(reg, 5),
 		application.Logger(&logger.Config{
 			Dir:        "",
 			MaxSize:    5,
@@ -36,9 +41,9 @@ func main() {
 	)
 	defer app.Release()
 
-	s := socketgateway.New(app, sockettype.TCP, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001}, "outer")
+	s := socketgateway.New(app, sockettype.MQTT, endtype.Frontend, url.Host{Ip: "127.0.0.1", Port: 8001}, "outer")
 	l, _ := rpc2.NewListener(url.Host{Ip: "127.0.0.1", Port: 8002})
-	rps := rpc2.New(app, l, "gw", "gw", endtype.Frontend, nil)
+	rps := rpc2.New(app, l, "gw", "gw", endtype.Frontend, nil, rpc2.RegEnable())
 	s.With(socketgateway.Rpc(rps))
 	e, _ := http.Default("127.0.0.1", 8003, &engine.Config{
 		Name:      "gw",
@@ -51,7 +56,7 @@ func main() {
 	}))
 	s.With(socketgateway.ReuseAddr())
 	s.With(socketgateway.DefaultUser(&socket.AuthUser{
-		Id:   0,
+		Id:   1,
 		Name: "system",
 		Attr: nil,
 	}))
@@ -72,9 +77,10 @@ H/HfPY4Tk5jbdjacazY8YySaSSk8/p5zsDIl2/irMZTR4DhDisCtIE69NvECQQCM
 UPVJ6NMli2MBL5Noj60dDNcNbKMS3D5yB2HxFf7PxEq+
 -----END rsa private key-----
 `)))
-	s.With(socketgateway.Tick(time.Second * 30))
-	s.With(socketgateway.Heartbeat(time.Second * 60))
-
+	s.With(socketgateway.Tick(time.Second * 1))
+	s.With(socketgateway.Heartbeat(time.Second * 10))
+	s.With(socketgateway.Mqtt("tcp://127.0.0.1:1883", mqtt2.Auth("test", "123456")))
+	s.With(socketgateway.MqttRawTopic(mqtt.QosTopic{Topic: "testtopic/{device_sn}", Qos: mqtt2.QoS0}))
 	s.Manager().ConnectionsListen(func(c *manage.Connection, b bool) {
 		if b {
 			log.Println("MANAGER>>>", c.Fd, " connected")

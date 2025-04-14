@@ -129,6 +129,9 @@ func (e *Engine) OnTick() (delay time.Duration, action gnet.Action) {
 }
 
 func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t sockettype.SocketType, p int, c *socket.Config) (err error) {
+	if t == sockettype.HTTP || t == sockettype.MQTT {
+		return errors.New("the engin not support the socket type: " + t.String())
+	}
 	e.server = s
 	e.event = ee
 	e.ctx = ctx

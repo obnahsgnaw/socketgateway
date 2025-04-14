@@ -18,8 +18,11 @@ import (
 	groupv1 "github.com/obnahsgnaw/socketapi/gen/group/v1"
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
 	slbv1 "github.com/obnahsgnaw/socketapi/gen/slb/v1"
+	"github.com/obnahsgnaw/socketgateway/pkg/mqtt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/engine/custom/http"
+	mqtt2 "github.com/obnahsgnaw/socketgateway/pkg/socket/engine/custom/mqtt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/action"
 	"github.com/obnahsgnaw/socketgateway/service/doc"
@@ -49,8 +52,7 @@ type Server struct {
 	endType         endtype.EndType
 	rawServerType   servertype.ServerType
 	rawSocketType   sockettype.SocketType
-	proxySocketType sockettype.SocketType // The type of proxy, e.g. the gateway is UDP but handles TCP handlers
-	proxyServerType servertype.ServerType
+	businessChannel string
 	host            url.Host
 	server          *socket.Server
 	engine          socket.Engine
@@ -63,7 +65,7 @@ type Server struct {
 	logger          *zap.Logger
 	logCnf          *logger.Config
 	regInfo         *regCenter.RegInfo
-	handlerRegInfo  *regCenter.RegInfo
+	watchHdlRegInfo *regCenter.RegInfo
 	errs            []error
 	poll            bool
 	regEnable       bool
@@ -76,6 +78,12 @@ type Server struct {
 	watchClient     *rpcclient.Manager
 	manager         *manage.Manager
 	managerTrigger  *manage.Trigger
+
+	mqttAddr        string
+	mqttOptions     []mqtt.Option
+	mqttRawTopics   []mqtt2.QosTopic
+	mqttClientTopic *mqtt2.QosTopic
+	mqttServerTopic *mqtt2.QosTopic
 }
 
 type AuthProvider interface {
@@ -83,27 +91,14 @@ type AuthProvider interface {
 	GetIdUser(uid string) (*socket.AuthUser, error)
 }
 
-func st2hdt(sst servertype.ServerType) servertype.ServerType {
-	switch sst {
-	case servertype.Tcp:
-		return servertype.TcpHdl
-	case servertype.Wss:
-		return servertype.WssHdl
-	case servertype.Udp:
-		return servertype.UdpHdl
-	}
-	panic("trans server type to handler type failed")
-}
-
-func New(app *application.Application, st sockettype.SocketType, et endtype.EndType, host url.Host, options ...Option) *Server {
+func New(app *application.Application, st sockettype.SocketType, et endtype.EndType, host url.Host, businessChannel string, options ...Option) *Server {
 	var err error
 	s := &Server{
 		id:              "gateway-gateway",
 		name:            "gateway",
 		rawServerType:   st.ToServerType(),
-		proxyServerType: st.ToServerType(),
 		rawSocketType:   st,
-		proxySocketType: st,
+		businessChannel: businessChannel,
 		endType:         et,
 		host:            host,
 		app:             app,
@@ -114,7 +109,7 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 		s.addErr(errors.New(s.msg("type not support")))
 	}
 	s.logCnf = s.app.LogConfig()
-	s.logger = s.app.Logger().Named(utils.ToStr(s.rawServerType.String(), "-", s.endType.String(), "-", "gateway"))
+	s.logger = s.app.Logger().Named(utils.ToStr(s.businessChannel, "-", s.rawServerType.String(), "-", s.endType.String(), "-", "gateway"))
 	s.addErr(err)
 	s.With(options...)
 	s.initRegInfo()
@@ -141,28 +136,24 @@ func New(app *application.Application, st sockettype.SocketType, et endtype.EndT
 func (s *Server) initRegInfo() {
 	s.regInfo = &regCenter.RegInfo{
 		AppId:   s.app.Cluster().Id(),
-		RegType: regtype.RegType(s.proxyServerType),
+		RegType: "socket-gw",
 		ServerInfo: regCenter.ServerInfo{
 			Id:      s.id,
 			Name:    s.name,
-			Type:    s.proxyServerType.String(),
+			Type:    s.businessChannel,
 			EndType: s.endType.String(),
 		},
 		Host: s.host.String(),
 		Val:  s.host.String(),
 		Ttl:  s.app.RegTtl(),
 	}
-	s.handlerRegInfo = &regCenter.RegInfo{
+	s.watchHdlRegInfo = &regCenter.RegInfo{
 		AppId:   s.app.Cluster().Id(),
 		RegType: regtype.Rpc,
 		ServerInfo: regCenter.ServerInfo{
-			Id:      s.id,
-			Name:    s.name,
-			Type:    st2hdt(s.proxyServerType).String(),
+			Type:    "socket-hdl@" + s.businessChannel,
 			EndType: s.endType.String(),
 		},
-		Host:      "",
-		Val:       "",
 		Ttl:       s.app.RegTtl(),
 		KeyPreGen: regCenter.ActionRegKeyPrefixGenerator(),
 	}
@@ -170,9 +161,7 @@ func (s *Server) initRegInfo() {
 		AppId:   s.app.Cluster().Id(),
 		RegType: regtype.Rpc,
 		ServerInfo: regCenter.ServerInfo{
-			Id:      s.rawSocketType.String() + "-gateway",
-			Name:    "",
-			Type:    s.proxyServerType.String(),
+			Type:    "socket-gw@" + s.businessChannel,
 			EndType: s.endType.String(),
 		},
 	}
@@ -232,7 +221,28 @@ func (s *Server) Run(failedCb func(error)) {
 	}
 	s.logger.Info("init start...")
 	if s.engine == nil {
-		s.engine = engine.Default()
+		if s.rawSocketType == sockettype.HTTP {
+			s.engine = http.New(s.host.Ip)
+		} else if s.rawSocketType == sockettype.MQTT {
+			if s.mqttAddr == "" {
+				failedCb(errors.New(s.msg("mqtt addr not set")))
+				return
+			}
+			eg := mqtt2.New(s.mqttAddr, s.mqttOptions...)
+			if s.mqttServerTopic != nil && s.mqttClientTopic != nil {
+				if err := eg.ListenTopic(*s.mqttClientTopic, *s.mqttServerTopic); err != nil {
+					failedCb(errors.New(s.msg(err.Error())))
+					return
+				}
+			}
+			if err := eg.ListenRawTopic(s.mqttRawTopics...); err != nil {
+				failedCb(errors.New(s.msg(err.Error())))
+				return
+			}
+			s.engine = eg
+		} else {
+			s.engine = engine.Default()
+		}
 		s.logger.Info("socket engine initialize(default)")
 	} else {
 		s.logger.Info("socket engine initialize(customer)")
@@ -401,7 +411,7 @@ func (s *Server) initRpc() {
 		})
 		s.actManager.With(action.CloseAction(closeAction))
 		s.actManager.With(action.Gateway(s.rpcServer.Host()))
-		s.actManager.With(action.RtHandler(impl.NewRemoteHandler(s.app.Context(), s.logger, impl.St2hct(s.proxySocketType))))
+		s.actManager.With(action.RtHandler(impl.NewRemoteHandler(s.app.Context(), s.logger, s.businessChannel)))
 	}
 }
 
@@ -409,10 +419,10 @@ func (s *Server) docConfig() *DocConfig {
 	return &DocConfig{
 		id:       s.id,
 		endType:  s.endType,
-		servType: s.proxyServerType,
+		servType: servertype.ServerType(s.businessChannel),
 		RegTtl:   s.app.RegTtl(),
 		Doc: DocItem{
-			socketType: s.proxySocketType,
+			socketType: sockettype.SocketType(s.businessChannel),
 			Title:      s.name,
 			Public:     true,
 			Provider: func() ([]byte, error) {
@@ -504,7 +514,7 @@ func (s *Server) watch(register regCenter.Register) error {
 	}
 	// watch handler
 	s.logger.Debug("handler watch start...")
-	handlerPrefix := s.handlerRegInfo.Prefix()
+	handlerPrefix := s.watchHdlRegInfo.Prefix()
 	err := register.Watch(s.app.Context(), handlerPrefix, func(key string, val string, isDel bool) {
 		segments := strings.Split(key, "/")
 		id := segments[len(segments)-3]

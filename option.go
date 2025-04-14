@@ -2,12 +2,14 @@ package socketgateway
 
 import (
 	"github.com/obnahsgnaw/application/pkg/utils"
+	"github.com/obnahsgnaw/application/servertype"
 	"github.com/obnahsgnaw/goutils/security/coder"
 	"github.com/obnahsgnaw/goutils/security/esutil"
 	"github.com/obnahsgnaw/http"
 	rpc2 "github.com/obnahsgnaw/rpc"
+	"github.com/obnahsgnaw/socketgateway/pkg/mqtt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
+	mqtt2 "github.com/obnahsgnaw/socketgateway/pkg/socket/engine/custom/mqtt"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"time"
@@ -110,7 +112,7 @@ func CodedProvider(p codec.DataBuilderProvider) Option {
 func Rpc(ins *rpc2.Server) Option {
 	return func(s *Server) {
 		s.rpcServer = ins
-		s.rpcServer.AddRegInfo(s.id, utils.ToStr(s.proxySocketType.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, s.proxyServerType))
+		s.rpcServer.AddRegInfo(s.id, utils.ToStr(s.rawSocketType.String(), "-", s.id, "-rpc"), rpc2.NewPServer(s.id, servertype.ServerType("socket-gw@"+s.businessChannel)))
 	}
 }
 
@@ -174,13 +176,6 @@ func Engine(e socket.Engine) Option {
 	}
 }
 
-func Proxy(st sockettype.SocketType) Option {
-	return func(s *Server) {
-		s.proxySocketType = st
-		s.proxyServerType = st.ToServerType()
-	}
-}
-
 func UserAuthenticate() Option {
 	return func(s *Server) {
 		s.addEventOption(eventhandler.UserAuthenticate())
@@ -205,9 +200,15 @@ func AuthenticatedBefores(fn ...func(socket.Conn, []byte) []byte) Option {
 	}
 }
 
-func WithoutWssDftUserAuthenticate() Option {
+func WithoutDftUserAuthenticate() Option {
 	return func(s *Server) {
-		s.addEventOption(eventhandler.WithoutWssDftUserAuthenticate())
+		s.addEventOption(eventhandler.WithoutDftUserAuthenticate())
+	}
+}
+
+func WithDftUserAuthenticate() Option {
+	return func(s *Server) {
+		s.addEventOption(eventhandler.WithDftUserAuthenticate())
 	}
 }
 
@@ -217,5 +218,25 @@ func Name(subId, name string) Option {
 			s.id = "gateway-" + subId
 			s.name = name
 		}
+	}
+}
+
+func Mqtt(tcpAddr string, option ...mqtt.Option) Option {
+	return func(s *Server) {
+		s.mqttAddr = tcpAddr
+		s.mqttOptions = option
+	}
+}
+
+func MqttRawTopic(topics ...mqtt2.QosTopic) Option {
+	return func(s *Server) {
+		s.mqttRawTopics = append(s.mqttRawTopics, topics...)
+	}
+}
+
+func MqttTopic(clientTopic, serverTopic mqtt2.QosTopic) Option {
+	return func(s *Server) {
+		s.mqttClientTopic = &clientTopic
+		s.mqttServerTopic = &serverTopic
 	}
 }
