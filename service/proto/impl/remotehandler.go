@@ -6,19 +6,18 @@ import (
 	"github.com/obnahsgnaw/rpc/pkg/rpcclient"
 	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
-	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
 type RemoteHandler struct {
-	ctx     context.Context
-	tp      handlerv1.SocketType
-	manager *rpcclient.Manager
+	ctx             context.Context
+	businessChannel string
+	manager         *rpcclient.Manager
 }
 
-func NewRemoteHandler(ctx context.Context, l *zap.Logger, tp handlerv1.SocketType) *RemoteHandler {
+func NewRemoteHandler(ctx context.Context, l *zap.Logger, businessChannel string) *RemoteHandler {
 	m := rpcclient.NewManager()
 	m.RegisterAfterHandler(func(ctx context.Context, head rpcclient.Header, method string, req, reply interface{}, cc *grpc.ClientConn, err error, opts ...grpc.CallOption) {
 		if err != nil {
@@ -27,7 +26,7 @@ func NewRemoteHandler(ctx context.Context, l *zap.Logger, tp handlerv1.SocketTyp
 			l.Debug(utils.ToStr(head.RqId, " ", head.From, " rpc call ", head.To, " socket-handler[", method, "] success"), zap.Any("rq_id", head.RqId), zap.Any("req", req), zap.Any("resp", reply))
 		}
 	})
-	return &RemoteHandler{ctx: ctx, manager: m, tp: tp}
+	return &RemoteHandler{ctx: ctx, manager: m, businessChannel: businessChannel}
 }
 
 func (h *RemoteHandler) Call(rqId, serverHost, gateway, format string, c socket.Conn, id codec.ActionId, data []byte) (codec.Action, []byte, error) {
@@ -36,13 +35,13 @@ func (h *RemoteHandler) Call(rqId, serverHost, gateway, format string, c socket.
 	err := h.manager.HostCall(h.ctx, serverHost, 1, "gateway", "handler", rqId, "", "", func(ctx context.Context, cc *grpc.ClientConn) error {
 		handler := handlerv1.NewHandlerServiceClient(cc)
 		req := &handlerv1.HandleRequest{
-			ActionId: uint32(id),
-			Package:  data,
-			Gateway:  gateway,
-			Fd:       int64(c.Fd()),
-			BindIds:  c.Context().IdMap(),
-			Format:   format,
-			Typ:      h.tp,
+			ActionId:        uint32(id),
+			Package:         data,
+			Gateway:         gateway,
+			Fd:              int64(c.Fd()),
+			BindIds:         c.Context().IdMap(),
+			Format:          format,
+			BusinessChannel: h.businessChannel,
 		}
 		if c.Context().Authed() {
 			u := c.Context().User()
@@ -75,17 +74,4 @@ func (h *RemoteHandler) Call(rqId, serverHost, gateway, format string, c socket.
 		Id:   codec.ActionId(resp.ActionId),
 		Name: resp.ActionName,
 	}, resp.Package, nil
-}
-
-func St2hct(st sockettype.SocketType) handlerv1.SocketType {
-	switch st {
-	case sockettype.TCP, sockettype.TCP4, sockettype.TCP6:
-		return handlerv1.SocketType_Tcp
-	case sockettype.WSS:
-		return handlerv1.SocketType_Wss
-	case sockettype.UDP, sockettype.UDP4, sockettype.UDP6:
-		return handlerv1.SocketType_Udp
-	default:
-		panic("trans socket type to server type failed")
-	}
 }

@@ -18,6 +18,8 @@ const (
 	UDP4 SocketType = "udp4"
 	UDP6 SocketType = "udp6"
 	WSS  SocketType = "wss"
+	HTTP SocketType = "http"
+	MQTT SocketType = "mqtt"
 )
 
 func (s SocketType) IsTcp() bool {
@@ -42,6 +44,12 @@ func (s SocketType) ToServerType() (sst servertype.ServerType) {
 		break
 	case UDP, UDP4, UDP6:
 		sst = servertype.Udp
+		break
+	case HTTP:
+		sst = "http"
+		break
+	case MQTT:
+		sst = "mqtt"
 		break
 	default:
 		panic("trans socket type to server type failed")

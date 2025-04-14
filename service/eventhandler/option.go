@@ -168,9 +168,15 @@ func AuthenticatedBefores(fn ...func(socket.Conn, []byte) []byte) Option {
 	}
 }
 
-func WithoutWssDftUserAuthenticate() Option {
+func WithoutDftUserAuthenticate() Option {
 	return func(event *Event) {
 		event.withoutWssDftUserAuthenticate = true
+	}
+}
+
+func WithDftUserAuthenticate() Option {
+	return func(event *Event) {
+		event.withoutWssDftUserAuthenticate = false
 	}
 }
 

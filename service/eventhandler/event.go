@@ -146,7 +146,6 @@ func (e *Event) OnBoot(s *socket.Server) {
 	if e.logger != nil {
 		e.logger.Info(utils.ToStr(s.Type().String(), " service[", strconv.Itoa(s.Port()), "] booted"))
 	}
-	e.proxyTick(e.ctx)
 }
 
 func (e *Event) OnOpen(_ *socket.Server, c socket.Conn) {

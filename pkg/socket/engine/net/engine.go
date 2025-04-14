@@ -39,6 +39,9 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, ee socket.Event, t s
 			fmt.Printf("%v\n", err)
 		}
 	}()
+	if t == sockettype.HTTP || t == sockettype.MQTT {
+		return errors.New("the engin not support the socket type: " + t.String())
+	}
 	e.server = s
 	e.event = ee
 	e.ctx, e.cancel = context.WithCancel(ctx)
