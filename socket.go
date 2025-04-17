@@ -593,3 +593,7 @@ func (s *Server) Host() url.Host {
 func (s *Server) Manager() *manage.Manager {
 	return s.manager
 }
+
+func (s *Server) ActionManager() *action.Manager {
+	return s.actManager
+}
