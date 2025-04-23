@@ -120,10 +120,24 @@ func (m *Manager) initType(action codec.Action) {
 		valSegments := strings.Split(action.Name, ":")
 		switch valSegments[0] {
 		case "authenticate":
-			m.authenticateActions.Store(valSegments[1], action.Id)
+			if strings.Contains(valSegments[1], ",") {
+				tps := strings.Split(valSegments[1], ",")
+				for _, tp := range tps {
+					m.authenticateActions.Store(tp, action.Id)
+				}
+			} else {
+				m.authenticateActions.Store(valSegments[1], action.Id)
+			}
 			break
 		case "raw":
-			m.rawActions.Store(valSegments[1], action.Id)
+			if strings.Contains(valSegments[1], ",") {
+				tps := strings.Split(valSegments[1], ",")
+				for _, tp := range tps {
+					m.rawActions.Store(tp, action.Id)
+				}
+			} else {
+				m.rawActions.Store(valSegments[1], action.Id)
+			}
 			break
 		default:
 		}
