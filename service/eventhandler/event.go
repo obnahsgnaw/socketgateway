@@ -25,6 +25,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -131,6 +132,27 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 	if s.st.IsWss() && !s.withoutWssDftUserAuthenticate {
 		s.withUserAuthenticate()
 	}
+	// TODO
+	s.am.RegisterHandlerAction(codec.NewAction(codec.ActionId(99), "authenticate:device"), func() codec.DataPtr {
+		return &handlerv1.AuthenticateRequest{}
+	}, func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr) {
+		response := &handlerv1.AuthenticateResponse{}
+		respData = response
+		q := data.(*handlerv1.AuthenticateRequest)
+		// 这里只做解密，后面再做用户查询，以及数据填充
+		response.Error = "NO_CERT"
+		response.Type = q.Type
+		response.Id = q.Id
+		response.Master = "abc"
+		response.CompanyId = 0
+		response.UserId = 0
+		response.Config = map[string]string{
+			"session_ttl":        "600",
+			"master_session_ttl": "600",
+		}
+
+		return
+	})
 
 	return s
 }
@@ -183,7 +205,6 @@ func (e *Event) handleClose(_ *socket.Server, c socket.Conn, err error) {
 			e.trigger.ConnectionLeave(c)
 		}
 	}()
-
 	reason := ""
 	if err != nil {
 		reason = err.Error()
@@ -195,6 +216,7 @@ func (e *Event) handleClose(_ *socket.Server, c socket.Conn, err error) {
 	}
 	e.log(c, "", "Disconnected, reason="+reason, zapcore.InfoLevel)
 	e.am.HandleClose(c)
+	_ = e.ss.Authenticate(c, nil)
 }
 
 func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
@@ -575,7 +597,10 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		}
 
 		e.log(c, rqId, utils.ToStr("authenticate: type=", authentication.Type, ", id=", authentication.Id), zapcore.InfoLevel)
-		e.ss.Authenticate(c, authentication)
+		if err = e.ss.Authenticate(c, authentication); err != nil {
+			response = "222"
+			return
+		}
 		// 用户类型 可以后面进行认证
 		if user != nil {
 			e.log(c, rqId, utils.ToStr("authenticate user=", user.Name), zapcore.InfoLevel)
@@ -591,6 +616,11 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 				fn(c)
 			}
 		}
+
+		// TODO
+		log.Println(c.Context().Authentication().SessionId())
+		log.Println(c.Context().Authentication().MasterSessionId())
+
 		return
 	}
 	initPackage = pkg

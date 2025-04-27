@@ -2,9 +2,12 @@ package socket
 
 import (
 	"context"
+	"errors"
 	"github.com/obnahsgnaw/rpc/pkg/rpcclient"
+	connv1 "github.com/obnahsgnaw/socketapi/gen/conninfo/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/group"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
+	"google.golang.org/grpc"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,6 +41,8 @@ type Server struct {
 	connIdBinds  sync.Map // map[string]map[int]struct{}
 	relatedBinds sync.Map // map[string][]string
 	watchClient  *rpcclient.Manager
+
+	sessionManager *SessionManager
 }
 
 // New return a Server
@@ -50,6 +55,8 @@ func New(ctx context.Context, t sockettype.SocketType, p int, e Engine, event Ev
 		config:      c,
 		groups:      group.New(),
 		watchClient: watchClient,
+
+		sessionManager: NewSessionManager(),
 	}
 	s.event = newCountedEvent(s, event)
 
@@ -272,7 +279,7 @@ func (s *Server) Auth(c Conn, u *AuthUser) {
 	}
 }
 
-func (s *Server) Authenticate(c Conn, u *Authentication) {
+func (s *Server) Authenticate(c Conn, u *Authentication) error {
 	if u != nil {
 		c.Context().authenticate(u)
 		s.BindId(c, ConnId{
@@ -280,6 +287,35 @@ func (s *Server) Authenticate(c Conn, u *Authentication) {
 			Type: "TARGET",
 		})
 		s.BindRelate(c, u.Master, u.Id)
+		if sid, ok := s.sessionManager.Get(u.Id); ok {
+			u.sessionId = sid
+		} else {
+			ttl := 0
+			if u.Config != nil {
+				if ttlStr, ok1 := u.Config["session_ttl"]; ok1 {
+					ttl, _ = strconv.Atoi(ttlStr)
+				}
+			}
+			u.sessionId = s.sessionManager.New(u.Id, ttl)
+		}
+		if u.Master != u.Id {
+			gwSid, err := s.getGwSessionId(context.Background(), u.Master)
+			if err != nil {
+				return err
+			}
+			if gwSid != "" {
+				u.masterSessionId = gwSid
+				s.sessionManager.AddNum(u.Master)
+			} else {
+				ttl := 0
+				if u.Config != nil {
+					if ttlStr, ok1 := u.Config["master_session_ttl"]; ok1 {
+						ttl, _ = strconv.Atoi(ttlStr)
+					}
+				}
+				u.masterSessionId = s.sessionManager.New(u.Master, ttl)
+			}
+		}
 	} else {
 		u1 := c.Context().Authentication()
 		c.Context().authenticate(u)
@@ -289,8 +325,13 @@ func (s *Server) Authenticate(c Conn, u *Authentication) {
 				Type: "TARGET",
 			})
 			s.UnbindRelate(c, u1.Master, u1.Id)
+			s.sessionManager.Delete(u1.Id)
+			if u1.Master != u1.Id {
+				s.sessionManager.Delete(u1.Master)
+			}
 		}
 	}
+	return nil
 }
 
 func (s *Server) GetAuthenticatedConn(id string) (list []Conn) {
@@ -315,4 +356,34 @@ func (s *Server) GetAuthenticatedConn(id string) (list []Conn) {
 
 func (s *Server) GwManager() *rpcclient.Manager {
 	return s.watchClient
+}
+
+func (s *Server) getGwSessionId(ctx context.Context, target string) (string, error) {
+	if sid, _ := s.sessionManager.Get(target); sid != "" {
+		return sid, nil
+	}
+	for _, gw := range s.GwManager().Get("gateway") {
+		var sid string
+		err := s.GwManager().HostCall(ctx, gw, 0, "gateway", "gateway", "", "", "", func(ctx context.Context, cc *grpc.ClientConn) error {
+			resp, err1 := connv1.NewConnServiceClient(cc).SessionId(ctx, &connv1.ConnSidRequest{
+				Target: target,
+			})
+			if err1 != nil {
+				return err1
+			}
+			sid = resp.SessionId
+			return nil
+		})
+		if err != nil {
+			return "", errors.New("fetch gateway session id fail, err=" + err.Error())
+		}
+		if sid != "" {
+			return sid, nil
+		}
+	}
+	return "", nil
+}
+
+func (s *Server) GetSessionId(target string) (string, bool) {
+	return s.sessionManager.Get(target)
 }
