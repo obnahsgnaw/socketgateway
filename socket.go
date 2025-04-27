@@ -488,14 +488,19 @@ func (s *Server) defaultListen() {
 						response.Success = false
 						return
 					}
-					s.server.Auth(c, u)
-					s.server.Authenticate(c, &socket.Authentication{
+					err = s.server.Authenticate(c, &socket.Authentication{
 						Type:   c.Context().Authentication().Type,
 						Id:     uid,
 						Master: uid,
 						Cid:    uint32(cid),
 						Uid:    uint32(u.Id),
 					})
+					if err != nil {
+						s.Logger().Error(s.msg("auth action request resp error: err=" + err.Error()))
+						response.Success = false
+						return
+					}
+					s.server.Auth(c, u)
 				}
 			}
 
