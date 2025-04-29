@@ -38,20 +38,19 @@ func (gw *ConnService) Info(_ context.Context, in *connv1.ConnInfoRequest) (resp
 		uname = u.Name
 	}
 	resp = &connv1.ConnInfoResponse{
-		LocalNetwork:    conn.LocalAddr().Network(),
-		LocalAddr:       conn.LocalAddr().String(),
-		RemoteNetwork:   conn.RemoteAddr().Network(),
-		RemoteAddr:      conn.RemoteAddr().String(),
-		ConnectAt:       conn.Context().ConnectedAt().Format("2006-01-02 15:04:05"),
-		Uid:             uid,
-		Uname:           uname,
-		SocketType:      gw.s().Type().String(),
-		TargetType:      conn.Context().Authentication().Type,
-		TargetId:        conn.Context().Authentication().Id,
-		TargetCid:       conn.Context().Authentication().Cid,
-		TargetUid:       conn.Context().Authentication().Uid,
-		TargetSid:       conn.Context().Authentication().SessionId(),
-		TargetMasterSid: conn.Context().Authentication().MasterSessionId(),
+		LocalNetwork:  conn.LocalAddr().Network(),
+		LocalAddr:     conn.LocalAddr().String(),
+		RemoteNetwork: conn.RemoteAddr().Network(),
+		RemoteAddr:    conn.RemoteAddr().String(),
+		ConnectAt:     conn.Context().ConnectedAt().Format("2006-01-02 15:04:05"),
+		Uid:           uid,
+		Uname:         uname,
+		SocketType:    gw.s().Type().String(),
+		TargetType:    conn.Context().Authentication().Type,
+		TargetId:      conn.Context().Authentication().Id,
+		TargetCid:     conn.Context().Authentication().Cid,
+		TargetUid:     conn.Context().Authentication().Uid,
+		TargetSid:     conn.Context().Authentication().SessionId(),
 	}
 	return
 }

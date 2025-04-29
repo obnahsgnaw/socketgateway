@@ -94,3 +94,19 @@ func (gw *BindService) DisconnectTarget(_ context.Context, in *bindv1.Disconnect
 	}
 	return
 }
+
+func (gw *BindService) BindProxyTarget(_ context.Context, in *bindv1.ProxyTargetRequest) (resp *bindv1.ProxyTargetResponse, err error) {
+	resp = &bindv1.ProxyTargetResponse{}
+	for _, t := range in.Target {
+		gw.s().BindProxyTarget(t, in.Fd)
+	}
+	return
+}
+
+func (gw *BindService) UnbindProxyTarget(_ context.Context, in *bindv1.ProxyTargetRequest) (resp *bindv1.ProxyTargetResponse, err error) {
+	resp = &bindv1.ProxyTargetResponse{}
+	for _, t := range in.Target {
+		gw.s().UnbindProxyTarget(t, in.Fd)
+	}
+	return
+}

@@ -43,14 +43,10 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 	if in.GetFd() > 0 {
 		cc = []socket.Conn{gw.s().GetFdConn(int(in.GetFd()))}
 	} else if in.GetId() != nil {
-		if in.GetId().Type == "TARGET" {
-			cc = gw.s().GetRelatedConn(in.GetId().Id)
-		} else {
-			cc = gw.s().GetIdConn(socket.ConnId{
-				Id:   in.GetId().Id,
-				Type: in.GetId().Type,
-			})
-		}
+		cc = gw.s().GetIdConn(socket.ConnId{
+			Id:   in.GetId().Id,
+			Type: in.GetId().Type,
+		})
 	}
 	if len(cc) == 0 {
 		err = status.New(codes.NotFound, "connection not found or not support").Err()

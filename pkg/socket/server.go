@@ -9,7 +9,6 @@ import (
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"google.golang.org/grpc"
 	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -39,7 +38,7 @@ type Server struct {
 	engine       Engine
 	connections  sync.Map // map[int]Conn
 	connIdBinds  sync.Map // map[string]map[int]struct{}
-	relatedBinds sync.Map // map[string][]string
+	relatedBinds sync.Map // map[target][]fd
 	watchClient  *rpcclient.Manager
 
 	sessionManager *SessionManager
@@ -210,54 +209,12 @@ func (s *Server) delConn(c Conn) {
 				}
 			}
 		})
-		au := c.Context().Authentication()
-		if au != nil {
-			s.UnbindRelate(c, au.Master, au.Id)
-		}
 		// 退组
 		s.Groups().RangeGroups(func(g *group.Group) bool {
 			g.Leave(c.Fd())
 			return true
 		})
 	}
-}
-
-func (s *Server) BindRelate(c Conn, master, id string) {
-	if v, ok := s.relatedBinds.Load(master); ok {
-		vv := v.([]string)
-		vv = append(vv, id+"@"+strconv.Itoa(c.Fd()))
-		s.relatedBinds.Store(master, vv)
-	} else {
-		s.relatedBinds.Store(master, []string{id + "@" + strconv.Itoa(c.Fd())})
-	}
-}
-
-func (s *Server) UnbindRelate(c Conn, master, id string) {
-	if v, ok := s.relatedBinds.Load(master); ok {
-		vv := v.([]string)
-		var vv1 []string
-		for _, v1 := range vv {
-			if v1 != id+"@"+strconv.Itoa(c.Fd()) {
-				vv1 = append(vv1, v1)
-			}
-		}
-		s.relatedBinds.Store(master, vv1)
-	}
-}
-
-func (s *Server) GetRelatedConn(master string) []Conn {
-	var cc []Conn
-	if v, ok := s.relatedBinds.Load(master); ok {
-		vv := v.([]string)
-		for _, v1 := range vv {
-			v2 := strings.Split(v1, "@")[0]
-			c1 := s.GetIdConn(ConnId{Id: v2, Type: "TARGET"})
-			if c1 != nil {
-				cc = append(cc, c1...)
-			}
-		}
-	}
-	return cc
 }
 
 func (s *Server) Auth(c Conn, u *AuthUser) {
@@ -286,7 +243,6 @@ func (s *Server) Authenticate(c Conn, u *Authentication) error {
 			Id:   u.Id,
 			Type: "TARGET",
 		})
-		s.BindRelate(c, u.Master, u.Id)
 		if sid, ok := s.sessionManager.Get(u.Id); ok {
 			u.sessionId = sid
 		} else {
@@ -298,24 +254,6 @@ func (s *Server) Authenticate(c Conn, u *Authentication) error {
 			}
 			u.sessionId = s.sessionManager.New(u.Id, ttl)
 		}
-		if u.Master != u.Id {
-			gwSid, err := s.getGwSessionId(context.Background(), u.Master)
-			if err != nil {
-				return err
-			}
-			if gwSid != "" {
-				u.masterSessionId = gwSid
-				s.sessionManager.AddNum(u.Master)
-			} else {
-				ttl := 0
-				if u.Config != nil {
-					if ttlStr, ok1 := u.Config["master_session_ttl"]; ok1 {
-						ttl, _ = strconv.Atoi(ttlStr)
-					}
-				}
-				u.masterSessionId = s.sessionManager.New(u.Master, ttl)
-			}
-		}
 	} else {
 		u1 := c.Context().Authentication()
 		c.Context().authenticate(u)
@@ -324,11 +262,7 @@ func (s *Server) Authenticate(c Conn, u *Authentication) error {
 				Id:   u1.Id,
 				Type: "TARGET",
 			})
-			s.UnbindRelate(c, u1.Master, u1.Id)
 			s.sessionManager.Delete(u1.Id)
-			if u1.Master != u1.Id {
-				s.sessionManager.Delete(u1.Master)
-			}
 		}
 	}
 	return nil
@@ -386,4 +320,44 @@ func (s *Server) getGwSessionId(ctx context.Context, target string) (string, err
 
 func (s *Server) GetSessionId(target string) (string, bool) {
 	return s.sessionManager.Get(target)
+}
+
+func (s *Server) BindProxyTarget(target string, fd int64) {
+	var fds []int64
+	if v, ok := s.relatedBinds.Load(target); ok {
+		fds = v.([]int64)
+	}
+	for _, d := range fds {
+		if d == fd {
+			return
+		}
+	}
+	fds = append(fds, fd)
+	s.relatedBinds.Store(target, fds)
+}
+
+func (s *Server) UnbindProxyTarget(target string, fd int64) {
+	var fds []int64
+	var fds1 []int64
+	if v, ok := s.relatedBinds.Load(target); ok {
+		fds = v.([]int64)
+	}
+	for _, d := range fds {
+		if d != fd {
+			fds1 = append(fds1, d)
+		}
+	}
+	if len(fds1) == 0 {
+		s.relatedBinds.Delete(target)
+	} else {
+		s.relatedBinds.Store(target, fds1)
+	}
+}
+
+func (s *Server) QueryProxyTargetBinds(target string) []int64 {
+	var fds []int64
+	if v, ok := s.relatedBinds.Load(target); ok {
+		fds = v.([]int64)
+	}
+	return fds
 }

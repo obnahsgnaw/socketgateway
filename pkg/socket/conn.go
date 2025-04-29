@@ -79,27 +79,17 @@ func (s *AuthUser) Oid() uint {
 }
 
 type Authentication struct {
-	Type     string
-	Id       string
-	Master   string
-	Cid      uint32
-	Uid      uint32
-	Protocol string
-	Config   map[string]string
-
-	sessionId       string
-	masterSessionId string
+	Type      string
+	Id        string
+	Cid       uint32
+	Uid       uint32
+	Protocol  string
+	Config    map[string]string
+	sessionId string
 }
 
 func (a *Authentication) SessionId() string {
 	return a.sessionId
-}
-
-func (a *Authentication) MasterSessionId() string {
-	if a.Master == a.Id {
-		return a.sessionId
-	}
-	return a.masterSessionId
 }
 
 func (b ConnId) String() string {
