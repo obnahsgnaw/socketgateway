@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -132,27 +131,6 @@ func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, optio
 	if s.st.IsWss() && !s.withoutWssDftUserAuthenticate {
 		s.withUserAuthenticate()
 	}
-	// TODO
-	s.am.RegisterHandlerAction(codec.NewAction(codec.ActionId(99), "authenticate:device"), func() codec.DataPtr {
-		return &handlerv1.AuthenticateRequest{}
-	}, func(c socket.Conn, data codec.DataPtr) (respAction codec.Action, respData codec.DataPtr) {
-		response := &handlerv1.AuthenticateResponse{}
-		respData = response
-		q := data.(*handlerv1.AuthenticateRequest)
-		// 这里只做解密，后面再做用户查询，以及数据填充
-		response.Error = "NO_CERT"
-		response.Type = q.Type
-		response.Id = q.Id
-		response.Master = "abc"
-		response.CompanyId = 0
-		response.UserId = 0
-		response.Config = map[string]string{
-			"session_ttl":        "600",
-			"master_session_ttl": "600",
-		}
-
-		return
-	})
 
 	return s
 }
@@ -616,10 +594,6 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 				fn(c)
 			}
 		}
-
-		// TODO
-		log.Println(c.Context().Authentication().SessionId())
-		log.Println(c.Context().Authentication().MasterSessionId())
 
 		return
 	}
