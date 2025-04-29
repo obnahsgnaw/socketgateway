@@ -865,7 +865,6 @@ func (e *Event) withUserAuthenticate() {
 		}
 		response.Type = q.Type
 		response.Id = q.Id
-		response.Master = q.Id
 		response.CompanyId = 0
 		response.UserId = 0
 
