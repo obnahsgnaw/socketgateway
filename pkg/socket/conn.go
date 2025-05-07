@@ -81,6 +81,8 @@ func (s *AuthUser) Oid() uint {
 type Authentication struct {
 	Type      string
 	Id        string
+	Iid       int32
+	Sn        string
 	Cid       uint32
 	Uid       uint32
 	Protocol  string

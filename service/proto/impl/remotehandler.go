@@ -56,6 +56,8 @@ func (h *RemoteHandler) Call(rqId, serverHost, gateway, format string, c socket.
 			req.Target = &handlerv1.HandleRequest_Target{
 				Type:      target.Type,
 				Id:        target.Id,
+				Iid:       target.Iid,
+				Sn:        target.Sn,
 				Cid:       target.Cid,
 				Uid:       target.Uid,
 				Protocol:  target.Protocol,
