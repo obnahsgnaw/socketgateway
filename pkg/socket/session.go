@@ -33,6 +33,21 @@ func (s *SessionManager) Get(target string) (string, bool) {
 	return "", false
 }
 
+func (s *SessionManager) GetActive(target string) (string, bool) {
+	if session, ok := s.sessions.Load(target); ok {
+		ss := session.(*Session)
+		if ss.ExpireAt != nil {
+			if time.Now().After(*ss.ExpireAt) {
+				s.sessions.Delete(target)
+			}
+			return "", false
+		} else {
+			return ss.Id, true
+		}
+	}
+	return "", false
+}
+
 func (s *SessionManager) New(target string, ttl int) string {
 	sid := s.genSessionId()
 	s.sessions.Store(target, &Session{
