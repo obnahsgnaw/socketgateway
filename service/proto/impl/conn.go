@@ -50,21 +50,6 @@ func (gw *ConnService) Info(_ context.Context, in *connv1.ConnInfoRequest) (resp
 		TargetId:      conn.Context().Authentication().Id,
 		TargetCid:     conn.Context().Authentication().Cid,
 		TargetUid:     conn.Context().Authentication().Uid,
-		TargetSid:     conn.Context().Authentication().SessionId(),
-	}
-	return
-}
-
-func (gw *ConnService) SessionId(_ context.Context, in *connv1.ConnSidRequest) (resp *connv1.ConnSidResponse, err error) {
-	var sid string
-	if in.Active {
-		sid, _ = gw.s().GetActiveSessionId(in.Target)
-	} else {
-
-		sid, _ = gw.s().GetSessionId(in.Target)
-	}
-	resp = &connv1.ConnSidResponse{
-		SessionId: sid,
 	}
 	return
 }
