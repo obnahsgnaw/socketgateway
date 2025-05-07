@@ -79,19 +79,14 @@ func (s *AuthUser) Oid() uint {
 }
 
 type Authentication struct {
-	Type      string
-	Id        string
-	Iid       int32
-	Sn        string
-	Cid       uint32
-	Uid       uint32
-	Protocol  string
-	Config    map[string]string
-	sessionId string
-}
-
-func (a *Authentication) SessionId() string {
-	return a.sessionId
+	Type     string
+	Id       string
+	Iid      int32
+	Sn       string
+	Cid      uint32
+	Uid      uint32
+	Protocol string
+	Config   map[string]string
 }
 
 func (b ConnId) String() string {
