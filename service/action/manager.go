@@ -316,6 +316,8 @@ func (m *Manager) Authenticate(c socket.Conn, rqId string, b codec.DataBuilder, 
 	auth = &socket.Authentication{
 		Type:     response.Type,
 		Id:       response.Id,
+		Iid:      response.Iid,
+		Sn:       response.Sn,
 		Cid:      response.CompanyId,
 		Uid:      response.UserId,
 		Protocol: response.Protocol,

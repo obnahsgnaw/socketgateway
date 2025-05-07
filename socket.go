@@ -491,6 +491,8 @@ func (s *Server) defaultListen() {
 					err = s.server.Authenticate(c, &socket.Authentication{
 						Type: c.Context().Authentication().Type,
 						Id:   uid,
+						Iid:  int32(u.Id),
+						Sn:   uid,
 						Cid:  uint32(cid),
 						Uid:  uint32(u.Id),
 					})
