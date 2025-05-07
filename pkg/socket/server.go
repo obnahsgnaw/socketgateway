@@ -243,9 +243,13 @@ func (s *Server) Authenticate(c Conn, u *Authentication) error {
 			Id:   u.Id,
 			Type: "TARGET",
 		})
-		if sid, ok := s.sessionManager.Get(u.Id); ok {
-			u.sessionId = sid
+		if sid, err := s.getGwSessionId(s.ctx, u.Id); err != nil {
+			return err
 		} else {
+			if sid != "" {
+				u.sessionId = sid
+				return nil
+			}
 			ttl := 0
 			if u.Config != nil {
 				if ttlStr, ok1 := u.Config["session_ttl"]; ok1 {
@@ -320,6 +324,10 @@ func (s *Server) getGwSessionId(ctx context.Context, target string) (string, err
 
 func (s *Server) GetSessionId(target string) (string, bool) {
 	return s.sessionManager.Get(target)
+}
+
+func (s *Server) GetActiveSessionId(target string) (string, bool) {
+	return s.sessionManager.GetActive(target)
 }
 
 func (s *Server) BindProxyTarget(target string, fd int64) {
