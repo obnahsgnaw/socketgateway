@@ -327,7 +327,7 @@ func (m *Manager) Authenticate(c socket.Conn, rqId string, b codec.DataBuilder, 
 	return
 }
 
-func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string, actionData []byte, actionId uint32) (respData []byte, err error) {
+func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string, actionData []byte, actionId uint32) (respData []byte, subActions []*handlerv1.SubAction, err error) {
 	// encode to raw request
 	rawRequest := &handlerv1.RawRequest{ActionId: actionId, Data: actionData}
 	var rawByte []byte
@@ -338,14 +338,14 @@ func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string
 	}
 
 	// find the raw handler
-	aid, ok := m.rawActions.Load(tp)
+	rawActId, ok := m.rawActions.Load(tp)
 	if !ok {
 		err = errors.New("raw type no handler")
 		return
 	}
 	// when the action id is 0, to raw handler to handle input.
 	if actionId == 0 {
-		if respAction, rawByte, err = m.Dispatch(c, rqId, b, aid.(codec.ActionId), rawByte); err != nil {
+		if respAction, rawByte, err = m.Dispatch(c, rqId, b, rawActId.(codec.ActionId), rawByte); err != nil {
 			return
 		}
 		if err = b.Unpack(rawByte, &response); err != nil {
@@ -359,14 +359,14 @@ func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string
 			}
 			// when action handle response a action, dispatch to raw handler to trans output
 			if respAction.Id > 0 {
-				respData, err = m.Raw(c, rqId, b, tp, rawByte, uint32(respAction.Id))
+				respData, _, err = m.Raw(c, rqId, b, tp, rawByte, uint32(respAction.Id))
 				return
 			}
 		}
 		return
 	}
 	// otherwise to handle the output
-	if _, rawByte, err = m.Dispatch(c, rqId, b, aid.(codec.ActionId), rawByte); err != nil {
+	if _, rawByte, err = m.Dispatch(c, rqId, b, rawActId.(codec.ActionId), rawByte); err != nil {
 		return
 	}
 	if err = b.Unpack(rawByte, &response); err != nil {

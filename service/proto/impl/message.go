@@ -58,7 +58,7 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 		coderName := connutil.CoderName(c)
 		var msg []byte
 		if c.Context().Authentication().Protocol != "" {
-			if msg, lastErr = gw.e().ActionManager().Raw(c, rqId, gw.e().InternalDataCoder(), c.Context().Authentication().Protocol, in.PbMessage, in.ActionId); lastErr != nil {
+			if msg, _, lastErr = gw.e().ActionManager().Raw(c, rqId, gw.e().InternalDataCoder(), c.Context().Authentication().Protocol, in.PbMessage, in.ActionId); lastErr != nil {
 				continue
 			}
 		} else {

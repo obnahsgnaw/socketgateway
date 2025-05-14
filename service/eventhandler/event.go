@@ -291,7 +291,7 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 			e.log(c, rqId, "decrypt data failed, err="+decErr.Error(), zapcore.ErrorLevel)
 			return true
 		}
-		if respData, dispatchErr := e.am.Raw(c, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, decryptedData, 0); dispatchErr != nil {
+		if respData, subActions, dispatchErr := e.am.Raw(c, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, decryptedData, 0); dispatchErr != nil {
 			e.log(c, rqId, "package raw dispatch failed,err="+dispatchErr.Error(), zapcore.ErrorLevel)
 		} else {
 			if len(respData) > 0 {
@@ -301,6 +301,48 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 				} else {
 					if err1 := e.write(c, encryptedDaa); err1 != nil {
 						e.log(c, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
+					}
+				}
+			}
+			// sub actions
+			if len(subActions) > 0 {
+				for _, subAction := range subActions {
+					if subAction.ActionId <= 0 {
+						continue
+					}
+					subConn := c
+					if subAction.Target != "" {
+						conns := e.ss.GetAuthenticatedConn(subAction.Target)
+						if len(conns) > 0 {
+							subConn = conns[0]
+						} else {
+							subConn = nil
+							e.log(c, rqId, "raw sub action no conn for target="+subAction.Target, zapcore.WarnLevel)
+						}
+					}
+					if subConn != nil {
+						// dispatch
+						if subRespAct, subRespData, subErr := e.am.Dispatch(subConn, rqId, e.internalDataCoder, codec.ActionId(subAction.ActionId), subAction.Data); subErr != nil {
+							e.log(c, rqId, "raw sub action failed, err"+subErr.Error(), zapcore.WarnLevel)
+						} else {
+							if subRespAct.Id > 0 {
+								// hande output
+								if subResp, _, subOutErr := e.am.Raw(subConn, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, subRespData, 0); subOutErr != nil {
+									e.log(c, rqId, "raw sub action out transfer failed,err="+subOutErr.Error(), zapcore.ErrorLevel)
+								} else {
+									if len(subResp) > 0 {
+										encryptedDaa, err := e.encrypt(c, subResp)
+										if err != nil {
+											e.log(c, rqId, "raw sub action data encrypt failed"+err.Error(), zapcore.ErrorLevel)
+										} else {
+											if err1 := e.write(c, encryptedDaa); err1 != nil {
+												e.log(c, rqId, "raw sub action write failed,err="+err1.Error(), zapcore.ErrorLevel)
+											}
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			}
