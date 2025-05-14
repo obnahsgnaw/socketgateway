@@ -345,6 +345,7 @@ func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string
 	}
 	// when the action id is 0, to raw handler to handle input.
 	if actionId == 0 {
+		// handle raw action
 		if respAction, rawByte, err = m.Dispatch(c, rqId, b, rawActId.(codec.ActionId), rawByte); err != nil {
 			return
 		}
@@ -360,8 +361,8 @@ func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string
 			// when action handle response a action, dispatch to raw handler to trans output
 			if respAction.Id > 0 {
 				respData, _, err = m.Raw(c, rqId, b, tp, rawByte, uint32(respAction.Id))
-				return
 			}
+			subActions = response.SubActions
 		}
 		return
 	}
