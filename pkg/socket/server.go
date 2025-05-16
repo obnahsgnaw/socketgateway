@@ -274,8 +274,9 @@ func (s *Server) GetAuthenticatedConn(id string) (list []Conn) {
 			s.connIdBinds.Store(cc.String(), fds)
 		}
 	}
-	return nil
+	return
 }
+
 func (s *Server) GetAuthenticatedSnConn(id string) (list []Conn) {
 	cc := ConnId{Id: id, Type: "SN"}
 	if v, ok := s.connIdBinds.Load(cc.String()); ok {
@@ -293,7 +294,7 @@ func (s *Server) GetAuthenticatedSnConn(id string) (list []Conn) {
 			s.connIdBinds.Store(cc.String(), fds)
 		}
 	}
-	return nil
+	return
 }
 
 func (s *Server) GwManager() *rpcclient.Manager {
