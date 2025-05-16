@@ -236,6 +236,10 @@ func (s *Server) Authenticate(c Conn, u *Authentication) error {
 			Id:   u.Id,
 			Type: "TARGET",
 		})
+		s.BindId(c, ConnId{
+			Id:   u.Sn,
+			Type: "SN",
+		})
 	} else {
 		u1 := c.Context().Authentication()
 		c.Context().authenticate(u)
@@ -244,6 +248,10 @@ func (s *Server) Authenticate(c Conn, u *Authentication) error {
 				Id:   u1.Id,
 				Type: "TARGET",
 			})
+			s.UnbindId(c, ConnId{
+				Id:   u1.Sn,
+				Type: "SN",
+			})
 		}
 	}
 	return nil
@@ -251,6 +259,25 @@ func (s *Server) Authenticate(c Conn, u *Authentication) error {
 
 func (s *Server) GetAuthenticatedConn(id string) (list []Conn) {
 	cc := ConnId{Id: id, Type: "TARGET"}
+	if v, ok := s.connIdBinds.Load(cc.String()); ok {
+		fds := v.(map[int]struct{})
+		for fd := range fds {
+			if c := s.GetFdConn(fd); c != nil {
+				list = append(list, c)
+			} else {
+				delete(fds, fd)
+			}
+		}
+		if len(fds) == 0 {
+			s.connIdBinds.Delete(cc.String())
+		} else {
+			s.connIdBinds.Store(cc.String(), fds)
+		}
+	}
+	return nil
+}
+func (s *Server) GetAuthenticatedSnConn(id string) (list []Conn) {
+	cc := ConnId{Id: id, Type: "SN"}
 	if v, ok := s.connIdBinds.Load(cc.String()); ok {
 		fds := v.(map[int]struct{})
 		for fd := range fds {
