@@ -147,7 +147,7 @@ func (c *ConnContext) Ids() map[string]ConnId {
 func (c *ConnContext) IdMap() map[string]string {
 	m := make(map[string]string)
 	for _, id := range c.ids {
-		if id.Type != "TARGET" && id.Type != "UID" { // 减少传输
+		if id.Type != "TARGET" && id.Type != "SN" && id.Type != "UID" { // 减少传输
 			m[id.Type] = id.Id
 		}
 	}

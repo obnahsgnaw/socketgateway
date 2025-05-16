@@ -312,7 +312,7 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 					}
 					subConn := c
 					if subAction.Target != "" {
-						conns := e.ss.GetAuthenticatedConn(subAction.Target)
+						conns := e.ss.GetAuthenticatedSnConn(subAction.Target)
 						if len(conns) > 0 {
 							subConn = conns[0]
 						} else {
