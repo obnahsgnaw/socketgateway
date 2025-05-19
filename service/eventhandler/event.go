@@ -233,7 +233,8 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 
 	// Unpacking a protocol package
 	err = e.codecDecode(c, initPackage, func(packedPkg []byte) {
-		e.log(c, rqId, "package received", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
+		e.log(c, rqId, "package received", zapcore.InfoLevel)
+		e.log(c, rqId, "package data", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
 		// raw
 		if e.handleRaw(c, rqId, packedPkg) {
 			return
@@ -242,7 +243,8 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		if err1 != nil {
 			e.log(c, rqId, "package handled: request action="+rqAction.String()+err1.Error(), zapcore.WarnLevel)
 		} else {
-			e.log(c, rqId, "package handled: request action="+rqAction.String()+", response action="+respAction.String(), zapcore.InfoLevel, zap.String("rq_action", rqAction.String()), zap.String("resp_action", respAction.String()), zap.ByteString("rq_data", rqData), zap.ByteString("resp_data", respData))
+			e.log(c, rqId, "package handled: request action="+rqAction.String()+", response action="+respAction.String(), zapcore.InfoLevel)
+			e.log(c, rqId, "package handled data", zapcore.DebugLevel, zap.String("rq_action", rqAction.String()), zap.String("resp_action", respAction.String()), zap.ByteString("rq_data", rqData), zap.ByteString("resp_data", respData))
 		}
 		if len(respPackage) > 0 {
 			if err1 = e.write(c, respPackage); err1 != nil {
@@ -253,7 +255,8 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 		}
 	})
 	if err != nil {
-		e.log(c, rqId, "codec decode failed, err="+err.Error(), zapcore.WarnLevel, zap.ByteString("package", initPackage))
+		e.log(c, rqId, "codec decode failed, err="+err.Error(), zapcore.WarnLevel)
+		e.log(c, rqId, "codec decode data", zapcore.DebugLevel, zap.ByteString("package", initPackage))
 		if err = e.gatewayErrorResponse(c, rqId, gatewayv1.GatewayError_PackageErr, 0); err != nil {
 			e.log(c, rqId, err.Error(), zapcore.ErrorLevel)
 		}
@@ -286,6 +289,7 @@ func (e *Event) OnShutdown(s *socket.Server) {
 
 func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 	if c.Context().Authentication().Protocol != "" {
+		e.log(c, rqId, "start handle raw protocol:"+c.Context().Authentication().Protocol, zapcore.InfoLevel)
 		decryptedData, decErr := e.decrypt(c, packedPkg)
 		if decErr != nil {
 			e.log(c, rqId, "decrypt data failed, err="+decErr.Error(), zapcore.ErrorLevel)
@@ -295,9 +299,10 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 			e.log(c, rqId, "package raw dispatch failed,err="+dispatchErr.Error(), zapcore.ErrorLevel)
 		} else {
 			if len(respData) > 0 {
+				e.log(c, rqId, "raw response write", zapcore.ErrorLevel)
 				encryptedDaa, err := e.encrypt(c, respData)
 				if err != nil {
-					e.log(c, rqId, "data encrypt failed"+err.Error(), zapcore.ErrorLevel)
+					e.log(c, rqId, "raw output data encrypt failed"+err.Error(), zapcore.ErrorLevel)
 				} else {
 					if err1 := e.write(c, encryptedDaa); err1 != nil {
 						e.log(c, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
@@ -306,8 +311,12 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 			}
 			// sub actions
 			if len(subActions) > 0 {
+				e.log(c, rqId, "start handle sub actions", zapcore.InfoLevel)
 				for _, subAction := range subActions {
+					e.log(c, rqId, "start handle sub action:"+strconv.Itoa(int(subAction.ActionId))+",target="+subAction.Target, zapcore.InfoLevel)
+					e.log(c, rqId, "sub action data", zapcore.DebugLevel, zap.ByteString("package", subAction.Data))
 					if subAction.ActionId <= 0 {
+						e.log(c, rqId, "sub action zero, ignored", zapcore.WarnLevel)
 						continue
 					}
 					subConn := c
@@ -317,27 +326,32 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 							subConn = conns[0]
 						} else {
 							subConn = nil
-							e.log(c, rqId, "raw sub action no conn for target="+subAction.Target, zapcore.WarnLevel)
 						}
 					}
-					if subConn != nil {
-						// dispatch
-						if subRespAct, subRespData, subErr := e.am.Dispatch(subConn, rqId, e.internalDataCoder, codec.ActionId(subAction.ActionId), subAction.Data); subErr != nil {
-							e.log(c, rqId, "raw sub action failed, err"+subErr.Error(), zapcore.WarnLevel)
-						} else {
-							if subRespAct.Id > 0 {
-								// hande output
-								if subResp, _, subOutErr := e.am.Raw(subConn, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, subRespData, 0); subOutErr != nil {
-									e.log(c, rqId, "raw sub action out transfer failed,err="+subOutErr.Error(), zapcore.ErrorLevel)
-								} else {
-									if len(subResp) > 0 {
-										encryptedDaa, err := e.encrypt(c, subResp)
-										if err != nil {
-											e.log(c, rqId, "raw sub action data encrypt failed"+err.Error(), zapcore.ErrorLevel)
-										} else {
-											if err1 := e.write(c, encryptedDaa); err1 != nil {
-												e.log(c, rqId, "raw sub action write failed,err="+err1.Error(), zapcore.ErrorLevel)
-											}
+					if subConn == nil {
+						e.log(c, rqId, "sub action no conn for target="+subAction.Target, zapcore.WarnLevel)
+						continue
+					}
+
+					// dispatch
+					if subRespAct, subRespData, subErr := e.am.Dispatch(subConn, rqId, e.internalDataCoder, codec.ActionId(subAction.ActionId), subAction.Data); subErr != nil {
+						e.log(c, rqId, "sub action dispatch failed, err"+subErr.Error(), zapcore.WarnLevel)
+					} else {
+						e.log(c, rqId, "sub action success", zapcore.ErrorLevel)
+						if subRespAct.Id > 0 {
+							e.log(c, rqId, "sub action out transfer start", zapcore.ErrorLevel)
+							// hande output
+							if subResp, _, subOutErr := e.am.Raw(subConn, rqId, e.internalDataCoder, subConn.Context().Authentication().Protocol, subRespData, uint32(subRespAct.Id)); subOutErr != nil {
+								e.log(c, rqId, "sub action out transfer failed,err="+subOutErr.Error(), zapcore.ErrorLevel)
+							} else {
+								if len(subResp) > 0 {
+									e.log(c, rqId, "sub action raw response", zapcore.ErrorLevel)
+									encryptedDaa, err := e.encrypt(c, subResp)
+									if err != nil {
+										e.log(c, rqId, "sub action out data encrypt failed"+err.Error(), zapcore.ErrorLevel)
+									} else {
+										if err1 := e.write(c, encryptedDaa); err1 != nil {
+											e.log(c, rqId, "raw sub action write failed,err="+err1.Error(), zapcore.ErrorLevel)
 										}
 									}
 								}
@@ -488,7 +502,8 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 				pkg = fn(c, pkg)
 			}
 		}
-		e.log(c, rqId, "authenticate start", zapcore.InfoLevel, zap.ByteString("package", pkg))
+		e.log(c, rqId, "authenticate start", zapcore.InfoLevel)
+		e.log(c, rqId, "authenticate data", zapcore.DebugLevel, zap.ByteString("package", pkg))
 
 		hit = true
 		var notAuthenticatePackage bool
@@ -505,7 +520,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			}
 			if parts = bytes.SplitN(typeIdentify, []byte("@"), 3); len(parts) != 3 {
 				response = "222"
-				err = errors.New("type identify format error")
+				err = errors.New("type identify segment num error")
 				return
 			}
 			authentication = &socket.Authentication{Type: string(parts[0]), Id: string(parts[1])}
@@ -517,10 +532,12 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			codeType = e.defDataType
 			notAuthenticatePackage = true
 		}
+		e.log(c, rqId, "authenticate with type="+authentication.Type+",id="+authentication.Id+",dataType="+codeType.String(), zapcore.InfoLevel)
 
 		var keys []byte
 		secret := string(pkg)
 		if !e.Security() || e.commonCertForAll {
+			e.log(c, rqId, "authenticate without security", zapcore.InfoLevel)
 			secret = ""
 		}
 		noCert := false
@@ -529,19 +546,23 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			return
 		}
 		if string(keys) == "NO_CERT" {
+			e.log(c, rqId, "authenticate target no cert, ignored", zapcore.InfoLevel)
 			noCert = true
 			keys = nil
 		}
 
 		var key []byte
 		if e.Security() && !noCert {
+			e.log(c, rqId, "authenticate validate security key", zapcore.InfoLevel)
 			if e.commonCertForAll {
+				e.log(c, rqId, "authenticate with common security key", zapcore.InfoLevel)
 				keys, err = e.rsa.Decrypt(pkg, e.commonPrivateKey, true)
 				if err != nil {
 					response = "222"
 					return
 				}
 			}
+			e.log(c, rqId, "authenticate parse input security key", zapcore.InfoLevel)
 			if len(keys) != e.es.Type().KeyLen()+10 {
 				response = "222"
 				err = errors.New("invalid crypt key length")
@@ -563,6 +584,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			}
 			response = "111"
 		} else {
+			e.log(c, rqId, "authenticate without security key", zapcore.InfoLevel)
 			key = []byte("")
 			response = "000"
 			if notAuthenticatePackage {
@@ -589,9 +611,11 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 					}
 				} else {
 					// 纯id 需要后续认证
+					e.log(c, rqId, "authenticate without user, need auth next", zapcore.InfoLevel)
 				}
 			}
 		} else {
+			e.log(c, rqId, "authenticate with system user", zapcore.InfoLevel)
 			user = e.defaultUser
 		}
 
@@ -599,7 +623,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			// 验证是否已（当前、其他）
 			cc := e.ss.GetAuthenticatedConn(authentication.Id)
 			for _, ccc := range cc {
-				e.log(c, rqId, utils.ToStr("authenticate closed exist client"), zapcore.InfoLevel)
+				e.log(c, rqId, utils.ToStr("authenticate closed exist client:"+strconv.Itoa(ccc.Fd())), zapcore.InfoLevel)
 				ccc.Close()
 			}
 			for _, gw := range e.ss.GwManager().Get("gateway") {
@@ -616,7 +640,6 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			}
 		}
 
-		e.log(c, rqId, utils.ToStr("authenticate: type=", authentication.Type, ", id=", authentication.Id), zapcore.InfoLevel)
 		if err = e.ss.Authenticate(c, authentication); err != nil {
 			response = "222"
 			return
@@ -855,11 +878,13 @@ func (e *Event) write(c socket.Conn, data []byte) (err error) {
 // Send Sends data that the packet has already encoded，It is mainly used to send encoded data sent by a handler
 func (e *Event) Send(c socket.Conn, rqId string, a codec.Action, data []byte) (err error) {
 	if data, err = e.pack(c, a, data); err != nil {
-		e.log(c, rqId, "send action pack failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("package", data))
+		e.log(c, rqId, "send action pack failed, err="+err.Error(), zapcore.ErrorLevel)
+		e.log(c, rqId, "send action pack failed data", zapcore.DebugLevel, zap.String("action", a.String()), zap.ByteString("package", data))
 		return
 	}
 	if err = e.write(c, data); err != nil {
-		e.log(c, rqId, "send action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("package", data))
+		e.log(c, rqId, "send action failed, err="+err.Error(), zapcore.ErrorLevel)
+		e.log(c, rqId, "send action failed data", zapcore.DebugLevel, zap.String("action", a.String()), zap.ByteString("package", data))
 	} else {
 		e.log(c, "", "sent action["+a.String()+"]", zapcore.InfoLevel)
 	}
@@ -870,11 +895,13 @@ func (e *Event) Send(c socket.Conn, rqId string, a codec.Action, data []byte) (e
 func (e *Event) SendAction(c socket.Conn, a codec.Action, data codec.DataPtr) (err error) {
 	var packData []byte
 	if packData, err = e.packRaw(c, a, data); err != nil {
-		e.log(c, "", "send action pack failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.Any("package", data))
+		e.log(c, "", "send action pack failed, err="+err.Error(), zapcore.ErrorLevel)
+		e.log(c, "", "send action pack failed data", zapcore.ErrorLevel, zap.String("action", a.String()), zap.Any("package", data))
 		return
 	}
 	if err = e.write(c, packData); err != nil {
-		e.log(c, "", "send action failed, err="+err.Error(), zapcore.ErrorLevel, zap.String("action", a.String()), zap.ByteString("package", packData))
+		e.log(c, "", "send action failed, err="+err.Error(), zapcore.ErrorLevel)
+		e.log(c, "", "send action failed data", zapcore.DebugLevel, zap.String("action", a.String()), zap.ByteString("package", packData))
 	} else {
 		e.log(c, "", "sent action["+a.String()+"]", zapcore.InfoLevel)
 	}
