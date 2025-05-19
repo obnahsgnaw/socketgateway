@@ -337,9 +337,9 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 					if subRespAct, subRespData, subErr := e.am.Dispatch(subConn, rqId, e.internalDataCoder, codec.ActionId(subAction.ActionId), subAction.Data); subErr != nil {
 						e.log(c, rqId, "sub action dispatch failed, err"+subErr.Error(), zapcore.WarnLevel)
 					} else {
-						e.log(c, rqId, "sub action success", zapcore.InfoLevel)
+						e.log(c, rqId, "sub action dispatch success", zapcore.InfoLevel)
 						if subRespAct.Id > 0 {
-							e.log(c, rqId, "sub action out transfer start", zapcore.InfoLevel)
+							e.log(c, rqId, "sub action out transfer start, out action="+strconv.Itoa(int(subRespAct.Id)), zapcore.InfoLevel)
 							// hande output
 							if subResp, _, subOutErr := e.am.Raw(subConn, rqId, e.internalDataCoder, subConn.Context().Authentication().Protocol, subRespData, uint32(subRespAct.Id)); subOutErr != nil {
 								e.log(c, rqId, "sub action out transfer failed,err="+subOutErr.Error(), zapcore.ErrorLevel)
