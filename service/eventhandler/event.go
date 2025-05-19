@@ -299,7 +299,7 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 			e.log(c, rqId, "package raw dispatch failed,err="+dispatchErr.Error(), zapcore.ErrorLevel)
 		} else {
 			if len(respData) > 0 {
-				e.log(c, rqId, "raw response write", zapcore.ErrorLevel)
+				e.log(c, rqId, "raw response write", zapcore.InfoLevel)
 				encryptedDaa, err := e.encrypt(c, respData)
 				if err != nil {
 					e.log(c, rqId, "raw output data encrypt failed"+err.Error(), zapcore.ErrorLevel)
@@ -337,15 +337,15 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 					if subRespAct, subRespData, subErr := e.am.Dispatch(subConn, rqId, e.internalDataCoder, codec.ActionId(subAction.ActionId), subAction.Data); subErr != nil {
 						e.log(c, rqId, "sub action dispatch failed, err"+subErr.Error(), zapcore.WarnLevel)
 					} else {
-						e.log(c, rqId, "sub action success", zapcore.ErrorLevel)
+						e.log(c, rqId, "sub action success", zapcore.InfoLevel)
 						if subRespAct.Id > 0 {
-							e.log(c, rqId, "sub action out transfer start", zapcore.ErrorLevel)
+							e.log(c, rqId, "sub action out transfer start", zapcore.InfoLevel)
 							// hande output
 							if subResp, _, subOutErr := e.am.Raw(subConn, rqId, e.internalDataCoder, subConn.Context().Authentication().Protocol, subRespData, uint32(subRespAct.Id)); subOutErr != nil {
 								e.log(c, rqId, "sub action out transfer failed,err="+subOutErr.Error(), zapcore.ErrorLevel)
 							} else {
 								if len(subResp) > 0 {
-									e.log(c, rqId, "sub action raw response", zapcore.ErrorLevel)
+									e.log(c, rqId, "sub action raw response", zapcore.InfoLevel)
 									encryptedDaa, err := e.encrypt(c, subResp)
 									if err != nil {
 										e.log(c, rqId, "sub action out data encrypt failed"+err.Error(), zapcore.ErrorLevel)
