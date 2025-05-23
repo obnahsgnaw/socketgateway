@@ -41,7 +41,10 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 	}
 	var cc []socket.Conn
 	if in.GetFd() > 0 {
-		cc = []socket.Conn{gw.s().GetFdConn(int(in.GetFd()))}
+		ccc := gw.s().GetFdConn(int(in.GetFd()))
+		if ccc != nil {
+			cc = append(cc, ccc)
+		}
 	} else if in.GetId() != nil {
 		cc = gw.s().GetIdConn(socket.ConnId{
 			Id:   in.GetId().Id,
@@ -49,8 +52,22 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 		})
 	}
 	if len(cc) == 0 {
-		err = status.New(codes.NotFound, "connection not found or not support").Err()
-		return
+		if in.GetId() != nil && (in.GetId().Type == "TARGET" || in.GetId().Type == "SN") {
+			ccIds := gw.s().QueryProxyTargetBinds(in.GetId().Id)
+			if len(ccIds) > 0 {
+				for _, ccId := range ccIds {
+					ccc := gw.s().GetFdConn(int(ccId))
+					if ccc != nil {
+						cc = append(cc, ccc)
+					}
+				}
+			}
+		}
+
+		if len(cc) == 0 {
+			err = status.New(codes.NotFound, "connection not found or not support").Err()
+			return
+		}
 	}
 	var send bool
 	var lastErr error
