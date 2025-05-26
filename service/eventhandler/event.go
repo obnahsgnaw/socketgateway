@@ -875,6 +875,10 @@ func (e *Event) write(c socket.Conn, data []byte) (err error) {
 	return
 }
 
+func (e *Event) SendRaw(c socket.Conn, data []byte) (err error) {
+	return e.write(c, data)
+}
+
 // Send Sends data that the packet has already encoded，It is mainly used to send encoded data sent by a handler
 func (e *Event) Send(c socket.Conn, rqId string, a codec.Action, data []byte) (err error) {
 	if data, err = e.pack(c, a, data); err != nil {

@@ -78,17 +78,22 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 			if msg, _, lastErr = gw.e().ActionManager().Raw(c, rqId, gw.e().InternalDataCoder(), c.Context().Authentication().Protocol, in.PbMessage, in.ActionId); lastErr != nil {
 				continue
 			}
+			if err = gw.e().SendRaw(c, msg); err != nil {
+				lastErr = status.New(codes.Internal, "send raw message failed, err="+err.Error()).Err()
+			} else {
+				send = true
+			}
 		} else {
 			if coderName == codec.Proto {
 				msg = in.PbMessage
 			} else {
 				msg = in.JsonMessage
 			}
-		}
-		if err = gw.e().Send(c, rqId, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
-			lastErr = status.New(codes.Internal, "send message failed, err="+err.Error()).Err()
-		} else {
-			send = true
+			if err = gw.e().Send(c, rqId, codec.NewAction(codec.ActionId(in.ActionId), in.ActionName), msg); err != nil {
+				lastErr = status.New(codes.Internal, "send message failed, err="+err.Error()).Err()
+			} else {
+				send = true
+			}
 		}
 	}
 	// 发送到一个端即可
