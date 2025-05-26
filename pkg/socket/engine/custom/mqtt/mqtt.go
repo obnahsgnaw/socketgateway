@@ -2,7 +2,6 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/obnahsgnaw/goutils/strutil"
@@ -112,7 +111,7 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, eventHandler socket.
 							return nil
 						}
 						var msg messagev1.MqttPackage
-						if err1 := json.Unmarshal(wb, &msg); err1 != nil {
+						if err1 := proto.Unmarshal(wb, &msg); err1 != nil {
 							return err1
 						}
 						if msg.Topic == "" {
