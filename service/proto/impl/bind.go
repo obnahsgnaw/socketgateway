@@ -21,11 +21,11 @@ func NewBindService(s func() *socket.Server) *BindService {
 
 func (gw *BindService) BindId(_ context.Context, in *bindv1.BindIdRequest) (resp *bindv1.BindIdResponse, err error) {
 	if in.Fd == 0 {
-		resp = &bindv1.BindIdResponse{}
+		err = status.New(codes.InvalidArgument, "param:fd is required").Err()
 		return
 	}
 	if len(in.Ids) == 0 {
-		err = status.New(codes.InvalidArgument, "param:Id is required").Err()
+		err = status.New(codes.InvalidArgument, "param:id is required").Err()
 		return
 	}
 	for _, id := range in.Ids {
@@ -64,7 +64,7 @@ func (gw *BindService) BindExist(_ context.Context, in *bindv1.BindExistRequest)
 
 func (gw *BindService) UnBindId(_ context.Context, in *bindv1.UnBindIdRequest) (resp *bindv1.UnBindIdResponse, err error) {
 	if in.Fd == 0 {
-		resp = &bindv1.UnBindIdResponse{}
+		err = status.New(codes.InvalidArgument, "param:fd is required").Err()
 		return
 	}
 	if len(in.Types) == 0 {
@@ -86,6 +86,7 @@ func (gw *BindService) UnBindId(_ context.Context, in *bindv1.UnBindIdRequest) (
 func (gw *BindService) DisconnectTarget(_ context.Context, in *bindv1.DisconnectTargetRequest) (resp *bindv1.DisconnectTargetResponse, err error) {
 	resp = &bindv1.DisconnectTargetResponse{}
 	if in.Id == "" {
+		err = status.New(codes.InvalidArgument, "param:id is required").Err()
 		return
 	}
 	conn := gw.s().GetAuthenticatedConn(in.Id)
@@ -107,6 +108,52 @@ func (gw *BindService) UnbindProxyTarget(_ context.Context, in *bindv1.ProxyTarg
 	resp = &bindv1.ProxyTargetResponse{}
 	for _, t := range in.Target {
 		gw.s().UnbindProxyTarget(t, int(in.Fd))
+	}
+	return
+}
+
+func (gw *BindService) TargetBindId(_ context.Context, in *bindv1.TargetBindIdRequest) (resp *bindv1.TargetBindIdResponse, err error) {
+	resp = &bindv1.TargetBindIdResponse{}
+	if in.Target == "" {
+		err = status.New(codes.InvalidArgument, "param:target is required").Err()
+		return
+	}
+	if in.BindType == "" {
+		err = status.New(codes.InvalidArgument, "param:bindType is required").Err()
+		return
+	}
+
+	cc := gw.s().GetIdConn(socket.ConnId{
+		Id:   in.Target,
+		Type: "TARGET",
+	})
+	if cc == nil {
+		cc = gw.s().GetIdConn(socket.ConnId{
+			Id:   in.Target,
+			Type: "SN",
+		})
+	}
+	if cc == nil {
+		ccIds := gw.s().QueryProxyTargetBinds(in.Target)
+		if len(ccIds) > 0 {
+			for _, ccId := range ccIds {
+				ccc := gw.s().GetFdConn(ccId)
+				if ccc != nil {
+					cc = append(cc, ccc)
+					break
+				}
+			}
+		}
+		if len(cc) == 0 {
+			return
+		}
+	}
+	idMap := cc[0].Context().IdMap()
+	if v, ok := idMap[in.BindType]; ok {
+		resp.Id = &bindv1.Id{
+			Typ: in.BindType,
+			Id:  v,
+		}
 	}
 	return
 }

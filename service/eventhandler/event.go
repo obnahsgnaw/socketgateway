@@ -546,7 +546,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			return
 		}
 		if string(keys) == "NO_CERT" {
-			e.log(c, rqId, "authenticate target no cert, ignored", zapcore.InfoLevel)
+			e.log(c, rqId, "authenticate target no cert, ignored security parse", zapcore.InfoLevel)
 			noCert = true
 			keys = nil
 		}

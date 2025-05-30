@@ -166,7 +166,10 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, eventHandler socket.
 			if !conn.Context().Authenticated() {
 				conn.SetRq([]byte(strutil.ToString("device@", sn, "@proto::")))
 				e.eventHandler.OnTraffic(e.s, conn)
-				time.Sleep(time.Millisecond * 100)
+				time.Sleep(time.Millisecond * 500)
+			}
+			if !conn.Context().Authenticated() {
+				return
 			}
 			pkg := &messagev1.MqttPackage{
 				Duplicate: message.Duplicate(),
