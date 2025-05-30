@@ -34,21 +34,23 @@ type Server struct {
 	groups       *group.Groups
 	engine       Engine
 	connections  sync.Map // map[int]Conn
-	connIdBinds  sync.Map // map[string]map[int]struct{}
-	relatedBinds sync.Map // map[target][]fd
+	connIdBinds  *IDManager
+	relatedBinds *IDManager
 	watchClient  *rpcclient.Manager
 }
 
 // New return a Server
 func New(ctx context.Context, t sockettype.SocketType, p int, e Engine, event Event, c *Config, watchClient *rpcclient.Manager) *Server {
 	s := &Server{
-		ctx:         ctx,
-		typ:         t,
-		port:        p,
-		engine:      e,
-		config:      c,
-		groups:      group.New(),
-		watchClient: watchClient,
+		ctx:          ctx,
+		typ:          t,
+		port:         p,
+		engine:       e,
+		config:       c,
+		groups:       group.New(),
+		watchClient:  watchClient,
+		connIdBinds:  newIDManager(),
+		relatedBinds: newIDManager(),
 	}
 	s.event = newCountedEvent(s, event)
 
@@ -107,27 +109,13 @@ func (s *Server) Stop() {
 func (s *Server) BindId(c Conn, id ConnId) {
 	if id.Type != "" && id.Id != "" && c.Fd() > 0 {
 		c.Context().bind(id)
-		if v, ok := s.connIdBinds.Load(id.String()); ok {
-			vv := v.(map[int]struct{})
-			vv[c.Fd()] = struct{}{}
-			s.connIdBinds.Store(id.String(), vv)
-		} else {
-			s.connIdBinds.Store(id.String(), map[int]struct{}{c.Fd(): {}})
-		}
+		s.connIdBinds.Add(id.String(), c.Fd())
 	}
 }
 
 func (s *Server) UnbindId(c Conn, id ConnId) {
 	if id.Type != "" && id.Id != "" {
-		if v, ok := s.connIdBinds.Load(id.String()); ok {
-			vv := v.(map[int]struct{})
-			delete(vv, c.Fd())
-			if len(vv) == 0 {
-				s.connIdBinds.Delete(id.String())
-			} else {
-				s.connIdBinds.Store(id.String(), vv)
-			}
-		}
+		s.delIdFd(id, c.Fd())
 		c.Context().unbind(id)
 	}
 }
@@ -136,18 +124,14 @@ func (s *Server) UnbindTypedId(c Conn, typ string) {
 	if typ != "" {
 		id := c.Context().TypedId(typ)
 		if id.Id != "" {
-			if v, ok := s.connIdBinds.Load(id.String()); ok {
-				vv := v.(map[int]struct{})
-				delete(vv, c.Fd())
-				if len(vv) == 0 {
-					s.connIdBinds.Delete(id.String())
-				} else {
-					s.connIdBinds.Store(id.String(), vv)
-				}
-			}
+			s.delIdFd(id, c.Fd())
 			c.Context().unbind(id)
 		}
 	}
+}
+
+func (s *Server) delIdFd(id ConnId, fd int) {
+	s.connIdBinds.Del(id.String(), fd)
 }
 
 func (s *Server) GetFdConn(fd int) Conn {
@@ -158,19 +142,12 @@ func (s *Server) GetFdConn(fd int) Conn {
 }
 
 func (s *Server) GetIdConn(id ConnId) (list []Conn) {
-	if v, ok := s.connIdBinds.Load(id.String()); ok {
-		fds := v.(map[int]struct{})
-		for fd := range fds {
-			if c := s.GetFdConn(fd); c != nil {
-				list = append(list, c)
-			} else {
-				delete(fds, fd)
-			}
-		}
-		if len(fds) == 0 {
-			s.connIdBinds.Delete(id.String())
+	fds := s.connIdBinds.Get(id.String())
+	for _, fd := range fds {
+		if c := s.GetFdConn(fd); c != nil {
+			list = append(list, c)
 		} else {
-			s.connIdBinds.Store(id.String(), fds)
+			s.connIdBinds.Del(id.String(), fd)
 		}
 	}
 	return
@@ -192,15 +169,7 @@ func (s *Server) delConn(c Conn) {
 	if c.Fd() > 0 {
 		s.connections.Delete(c.Fd())
 		c.Context().RangeId(func(id ConnId) {
-			if v, ok := s.connIdBinds.Load(id.String()); ok {
-				vv := v.(map[int]struct{})
-				delete(vv, c.Fd())
-				if len(vv) == 0 {
-					s.connIdBinds.Delete(id.String())
-				} else {
-					s.connIdBinds.Store(id.String(), vv)
-				}
-			}
+			s.delIdFd(id, c.Fd())
 		})
 		// 退组
 		s.Groups().RangeGroups(func(g *group.Group) bool {
@@ -258,85 +227,25 @@ func (s *Server) Authenticate(c Conn, u *Authentication) error {
 }
 
 func (s *Server) GetAuthenticatedConn(id string) (list []Conn) {
-	cc := ConnId{Id: id, Type: "TARGET"}
-	if v, ok := s.connIdBinds.Load(cc.String()); ok {
-		fds := v.(map[int]struct{})
-		for fd := range fds {
-			if c := s.GetFdConn(fd); c != nil {
-				list = append(list, c)
-			} else {
-				delete(fds, fd)
-			}
-		}
-		if len(fds) == 0 {
-			s.connIdBinds.Delete(cc.String())
-		} else {
-			s.connIdBinds.Store(cc.String(), fds)
-		}
-	}
-	return
+	return s.GetIdConn(ConnId{Id: id, Type: "TARGET"})
 }
 
 func (s *Server) GetAuthenticatedSnConn(id string) (list []Conn) {
-	cc := ConnId{Id: id, Type: "SN"}
-	if v, ok := s.connIdBinds.Load(cc.String()); ok {
-		fds := v.(map[int]struct{})
-		for fd := range fds {
-			if c := s.GetFdConn(fd); c != nil {
-				list = append(list, c)
-			} else {
-				delete(fds, fd)
-			}
-		}
-		if len(fds) == 0 {
-			s.connIdBinds.Delete(cc.String())
-		} else {
-			s.connIdBinds.Store(cc.String(), fds)
-		}
-	}
-	return
+	return s.GetIdConn(ConnId{Id: id, Type: "SN"})
 }
 
 func (s *Server) GwManager() *rpcclient.Manager {
 	return s.watchClient
 }
 
-func (s *Server) BindProxyTarget(target string, fd int64) {
-	var fds []int64
-	if v, ok := s.relatedBinds.Load(target); ok {
-		fds = v.([]int64)
-	}
-	for _, d := range fds {
-		if d == fd {
-			return
-		}
-	}
-	fds = append(fds, fd)
-	s.relatedBinds.Store(target, fds)
+func (s *Server) BindProxyTarget(target string, fd int) {
+	s.relatedBinds.Add(target, fd)
 }
 
-func (s *Server) UnbindProxyTarget(target string, fd int64) {
-	var fds []int64
-	var fds1 []int64
-	if v, ok := s.relatedBinds.Load(target); ok {
-		fds = v.([]int64)
-	}
-	for _, d := range fds {
-		if d != fd {
-			fds1 = append(fds1, d)
-		}
-	}
-	if len(fds1) == 0 {
-		s.relatedBinds.Delete(target)
-	} else {
-		s.relatedBinds.Store(target, fds1)
-	}
+func (s *Server) UnbindProxyTarget(target string, fd int) {
+	s.relatedBinds.Del(target, fd)
 }
 
-func (s *Server) QueryProxyTargetBinds(target string) []int64 {
-	var fds []int64
-	if v, ok := s.relatedBinds.Load(target); ok {
-		fds = v.([]int64)
-	}
-	return fds
+func (s *Server) QueryProxyTargetBinds(target string) []int {
+	return s.relatedBinds.Get(target)
 }

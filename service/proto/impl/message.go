@@ -56,7 +56,7 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 			ccIds := gw.s().QueryProxyTargetBinds(in.GetId().Id)
 			if len(ccIds) > 0 {
 				for _, ccId := range ccIds {
-					ccc := gw.s().GetFdConn(int(ccId))
+					ccc := gw.s().GetFdConn(ccId)
 					if ccc != nil {
 						cc = append(cc, ccc)
 					}
