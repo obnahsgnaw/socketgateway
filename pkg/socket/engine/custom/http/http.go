@@ -9,6 +9,7 @@ import (
 	"github.com/obnahsgnaw/http"
 	httpengine "github.com/obnahsgnaw/http/engine"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/limiter"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"io"
 	http2 "net/http"
@@ -28,6 +29,7 @@ type Engine struct {
 	connections  sync.Map // target ==> conn
 	e            *http.Http
 	ip           string
+	limiter      *limiter.TimeLimiter
 }
 
 func New(ip string) *Engine {
@@ -35,7 +37,8 @@ func New(ip string) *Engine {
 		ip = "0.0.0.0"
 	}
 	return &Engine{
-		ip: ip,
+		ip:      ip,
+		limiter: limiter.NewTimeLimiter(10),
 	}
 }
 
@@ -82,6 +85,9 @@ func (e *Engine) newHttp() (err error) {
 			c.Writer.Header().Set("X-Error", "target is required")
 			c.Status(http2.StatusBadRequest)
 		}
+		if !e.limiter.Access(target) {
+			return
+		}
 		var conn *Conn
 		if v, ok := e.connections.Load(target); !ok {
 			conn = NewConn(target, int(e.genFd()), c.Request, func(id string) {
@@ -93,6 +99,7 @@ func (e *Engine) newHttp() (err error) {
 			})
 			e.connections.Store(target, conn)
 			e.eventHandler.OnOpen(e.s, conn)
+			conn.Context().SetOptional("fd-target", target)
 		} else {
 			conn = v.(*Conn)
 		}
@@ -106,13 +113,15 @@ func (e *Engine) newHttp() (err error) {
 		if authType != "" && !conn.Context().Authenticated() {
 			conn.SetRq([]byte(strutil.ToString(authType, "@", target, "@", dataType, "::", secret)))
 			e.eventHandler.OnTraffic(e.s, conn)
-			time.Sleep(time.Millisecond * 100)
+			time.Sleep(time.Millisecond * 500)
 			respData := conn.GetResp()
 			if string(respData) == "222" {
 				c.Writer.Header().Set("X-Error", "authentication failed")
 				c.Status(http2.StatusBadRequest)
+				e.limiter.Hit(target)
 				return
 			}
+			e.limiter.Release(target)
 			c.Writer.Header().Set("X-Error", string(respData))
 		}
 

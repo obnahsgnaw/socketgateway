@@ -14,6 +14,7 @@ import (
 	bindv1 "github.com/obnahsgnaw/socketapi/gen/bind/v1"
 	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/limiter"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/action"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
@@ -73,6 +74,8 @@ type Event struct {
 	withoutWssDftUserAuthenticate bool
 
 	trigger *manage.Trigger
+
+	authenticateLimiter *limiter.TimeLimiter
 }
 
 type LogWatcher func(c socket.Conn, msg string, l zapcore.Level, data ...zap.Field)
@@ -89,18 +92,19 @@ type AuthProvider interface {
 
 func New(ctx context.Context, m *action.Manager, st sockettype.SocketType, options ...Option) *Event {
 	s := &Event{
-		ctx:               ctx,
-		am:                m,
-		st:                st,
-		tickHandlers:      make(map[string]TickHandler),
-		rsa:               rsautil.New(rsautil.PKCS1Public(), rsautil.PKCS1Private(), rsautil.SignHash(crypto.SHA256), rsautil.Encoder(coder.B64StdEncoding)),
-		es:                esutil.New(esutil.Aes256, esutil.CbcMode, esutil.Encoder(coder.B64StdEncoding)),
-		esTp:              esutil.Aes256,
-		esMode:            esutil.CbcMode,
-		secEncoder:        coder.B64StdEncoding,
-		secTtl:            60,
-		defDataType:       codec.Json,
-		internalDataCoder: codec.NewProtobufDataBuilder(),
+		ctx:                 ctx,
+		am:                  m,
+		st:                  st,
+		tickHandlers:        make(map[string]TickHandler),
+		rsa:                 rsautil.New(rsautil.PKCS1Public(), rsautil.PKCS1Private(), rsautil.SignHash(crypto.SHA256), rsautil.Encoder(coder.B64StdEncoding)),
+		es:                  esutil.New(esutil.Aes256, esutil.CbcMode, esutil.Encoder(coder.B64StdEncoding)),
+		esTp:                esutil.Aes256,
+		esMode:              esutil.CbcMode,
+		secEncoder:          coder.B64StdEncoding,
+		secTtl:              60,
+		defDataType:         codec.Json,
+		internalDataCoder:   codec.NewProtobufDataBuilder(),
+		authenticateLimiter: limiter.NewTimeLimiter(10),
 	}
 	toData := func(p *codec.PKG) codec.DataPtr {
 		if p == nil {
@@ -441,8 +445,9 @@ func (e *Event) handleMessage(c socket.Conn, rqId string, packedPkg []byte) (rqA
 }
 
 func (e *Event) log(c socket.Conn, rqId, msg string, l zapcore.Level, data ...zap.Field) {
+	isSend := strings.HasSuffix(msg, "send") || strings.HasSuffix(msg, "sent")
 	if rqId != "" {
-		data = append(data, zap.String("rq_id", rqId))
+		msg = rqId + ": " + msg
 	}
 	if e.logWatcher != nil {
 		e.logWatcher(c, msg, l, data...)
@@ -456,7 +461,7 @@ func (e *Event) log(c socket.Conn, rqId, msg string, l zapcore.Level, data ...za
 				pkg = d.Interface.([]byte)
 			}
 		}
-		if strings.HasSuffix(msg, "send") || strings.HasSuffix(msg, "sent") {
+		if isSend {
 			e.trigger.ConnectionSentMessage(c, l.String(), msg, pkg)
 		} else {
 			e.trigger.ConnectionReceivedMessage(c, l.String(), msg, pkg)
@@ -496,6 +501,22 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		if pkg = e.initProxy(pkg); len(pkg) == 0 {
 			return
 		}
+
+		fdTarget := strconv.Itoa(c.Fd())
+		if v, ok := c.Context().GetOptional("fd-target"); ok {
+			fdTarget = v.(string)
+		}
+		if !e.authenticateLimiter.Access(fdTarget) {
+			hit = true
+			return
+		}
+		defer func() {
+			if err != nil {
+				e.authenticateLimiter.Hit(fdTarget)
+			} else {
+				e.authenticateLimiter.Release(fdTarget)
+			}
+		}()
 
 		for _, fn := range e.authenticatedBefores {
 			if fn != nil {
