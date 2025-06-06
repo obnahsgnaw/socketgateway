@@ -8,6 +8,7 @@ import (
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/mqtt"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/pkg/socket/limiter"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket/sockettype"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
 	"github.com/obnahsgnaw/socketutil/codec"
@@ -35,6 +36,7 @@ type Engine struct {
 	client       *mqtt.Client
 	topics       []QosTopic
 	serverTopic  *QosTopic
+	limiter      *limiter.TimeLimiter
 }
 
 type QosTopic struct {
@@ -44,7 +46,8 @@ type QosTopic struct {
 
 func New(addr string, o ...mqtt.Option) *Engine {
 	return &Engine{
-		client: mqtt.New(addr, o...),
+		client:  mqtt.New(addr, o...),
+		limiter: limiter.NewTimeLimiter(10),
 	}
 }
 
@@ -95,6 +98,9 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, eventHandler socket.
 
 	e.client.Message(func(client *mqtt.Client, message mqtt.Message) {
 		if sn := message.Param(topicIdKey); sn != "" {
+			if !e.limiter.Access(sn) {
+				return
+			}
 			var conn *Conn
 			var raw bool
 			if v, ok := e.connections.Load(sn); !ok {
@@ -132,6 +138,7 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, eventHandler socket.
 				})
 				raw = e.isRawMessage(message)
 				conn.Context().SetOptional("mqtt_raw", raw)
+				conn.Context().SetOptional("fd-target", sn)
 				e.connections.Store(sn, conn)
 				e.eventHandler.OnOpen(e.s, conn)
 			} else {
@@ -169,8 +176,10 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, eventHandler socket.
 				time.Sleep(time.Millisecond * 500)
 			}
 			if !conn.Context().Authenticated() {
+				e.limiter.Hit(sn)
 				return
 			}
+			e.limiter.Release(sn)
 			pkg := &messagev1.MqttPackage{
 				Duplicate: message.Duplicate(),
 				Qos:       int32(message.Qos()),
