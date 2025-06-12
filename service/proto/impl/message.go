@@ -46,13 +46,7 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 			cc = append(cc, ccc)
 		}
 	} else if in.GetId() != nil {
-		cc = gw.s().GetIdConn(socket.ConnId{
-			Id:   in.GetId().Id,
-			Type: in.GetId().Type,
-		})
-	}
-	if len(cc) == 0 {
-		if in.GetId() != nil && (in.GetId().Type == "TARGET" || in.GetId().Type == "SN") {
+		if in.GetId().Type == "TARGET" || in.GetId().Type == "SN" {
 			ccIds := gw.s().QueryProxyTargetBinds(in.GetId().Id)
 			if len(ccIds) > 0 {
 				for _, ccId := range ccIds {
@@ -63,7 +57,12 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 				}
 			}
 		}
-
+		if len(cc) == 0 {
+			cc = gw.s().GetIdConn(socket.ConnId{
+				Id:   in.GetId().Id,
+				Type: in.GetId().Type,
+			})
+		}
 		if len(cc) == 0 {
 			err = status.New(codes.NotFound, "connection not found or not support").Err()
 			return
