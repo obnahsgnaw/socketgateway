@@ -473,7 +473,7 @@ func (s *Server) defaultListen() {
 			} else {
 				u, err := s.authProvider.GetAuthedUser(q.Token)
 				if err != nil {
-					s.Logger().Error(s.msg("auth action request resp error: err=" + err.Error()))
+					s.Logger().Warn(s.msg("auth action request resp error: err=" + err.Error()))
 					response.Success = false
 				} else {
 					response.Success = true
@@ -484,7 +484,7 @@ func (s *Server) defaultListen() {
 					cidStr, _ := u.Attr["company_id"]
 					cid, _ := strconv.Atoi(cidStr)
 					if uid != c.Context().Authentication().Id {
-						s.Logger().Error(s.msg("auth action request resp error: uid diff of authenticate id", uid, c.Context().Authentication().Id))
+						s.Logger().Warn(s.msg("auth action request resp error: uid diff of authenticate id", uid, c.Context().Authentication().Id))
 						response.Success = false
 						return
 					}
@@ -497,7 +497,7 @@ func (s *Server) defaultListen() {
 						Uid:  uint32(u.Id),
 					})
 					if err != nil {
-						s.Logger().Error(s.msg("auth action request resp error: err=" + err.Error()))
+						s.Logger().Warn(s.msg("auth action request resp error: err=" + err.Error()))
 						response.Success = false
 						return
 					}

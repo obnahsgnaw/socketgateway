@@ -352,17 +352,22 @@ func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string
 		if err = b.Unpack(rawByte, &response); err != nil {
 			return
 		}
-		// when the raw input handle response action not 0, dispatch to the action handler to handle
+		// when the raw input handles response action not 0, dispatches to the action handler to handle
 		subActions = response.SubActions
 		if respAction.Id > 0 {
 			// dispatch to action handler
 			if respAction, rawByte, err = m.Dispatch(c, rqId, b, respAction.Id, response.Data); err != nil {
 				return
 			}
-			// when action handle response a action, dispatch to raw handler to trans output
+			// when action handle response an action, dispatch to raw handler to trans output
 			if respAction.Id > 0 {
-				respData, _, err = m.Raw(c, rqId, b, tp, rawByte, uint32(respAction.Id))
+				var subActions1 []*handlerv1.SubAction
+				respData, subActions1, err = m.Raw(c, rqId, b, tp, rawByte, uint32(respAction.Id))
+				subActions = append(subActions, subActions1...)
 			}
+		} else {
+			// raw out
+			respData = response.Data
 		}
 		return
 	}
@@ -374,5 +379,6 @@ func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string
 		return
 	}
 	respData = response.Data
+	subActions = response.SubActions
 	return
 }

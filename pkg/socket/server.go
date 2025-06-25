@@ -226,6 +226,10 @@ func (s *Server) Authenticate(c Conn, u *Authentication) error {
 	return nil
 }
 
+func (s *Server) ClearAuthentication(c Conn) {
+	_ = s.Authenticate(c, nil)
+}
+
 func (s *Server) GetAuthenticatedConn(id string) (list []Conn) {
 	return s.GetIdConn(ConnId{Id: id, Type: "TARGET"})
 }

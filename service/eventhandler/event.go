@@ -147,29 +147,16 @@ func (e *Event) With(options ...Option) {
 
 func (e *Event) OnBoot(s *socket.Server) {
 	e.ss = s
-	if e.logger != nil {
-		e.logger.Info(utils.ToStr(s.Type().String(), " service[", strconv.Itoa(s.Port()), "] booted"))
-	}
+	e.serverInfoLog(s.Type().String(), " service[", strconv.Itoa(s.Port()), "] booted")
 }
 
 func (e *Event) OnOpen(_ *socket.Server, c socket.Conn) {
 	defer utils.RecoverHandler("on open", func(err, stack string) {
-		if e.logger != nil {
-			e.logger.Error("on open err=" + err + ", stack=" + stack)
-		}
+		e.serverErrorLog("on open panic, err=", err, ", stack=", stack)
 	})
-
-	if e.trigger != nil {
-		e.trigger.ConnectionJoin(c)
-	}
-
-	rqId := utils.GenLocalId("rq")
-	e.log(c, rqId, "Connected", zapcore.InfoLevel)
-	if err := e.openIntercept(); err != nil {
-		e.log(c, rqId, "open intercepted:"+err.Error(), zapcore.WarnLevel)
-		connutil.SetCloseReason(c, "close by interceptor: "+err.Error())
-		c.Close()
-	}
+	e.log(c, "", "connected", zapcore.InfoLevel)
+	e.triggerConnectionJoin(c)
+	e.openIntercept(c)
 }
 
 func (e *Event) OnClose(s *socket.Server, c socket.Conn, err error) {
@@ -178,46 +165,30 @@ func (e *Event) OnClose(s *socket.Server, c socket.Conn, err error) {
 
 func (e *Event) handleClose(_ *socket.Server, c socket.Conn, err error) {
 	defer utils.RecoverHandler("on close", func(err, stack string) {
-		if e.logger != nil {
-			e.logger.Error("on close err=" + err + ", stack=" + stack)
-		}
+		e.serverErrorLog("on close panic, err=", err, ", stack=", stack)
 	})
 	defer func() {
-		if e.trigger != nil {
-			e.trigger.ConnectionLeave(c)
-		}
+		e.triggerConnectionLeave(c)
 	}()
-	reason := ""
-	if err != nil {
-		reason = err.Error()
-	} else {
-		reason = connutil.GetCloseReason(c)
-		if reason == "" {
-			reason = "unknown"
-		}
-	}
-	e.log(c, "", "Disconnected, reason="+reason, zapcore.InfoLevel)
+	reason := e.getCloseReason(c, err)
+	e.log(c, "", "disconnected "+reason, zapcore.InfoLevel)
 	e.am.HandleClose(c)
-	_ = e.ss.Authenticate(c, nil)
+	e.ss.ClearAuthentication(c)
 }
 
 func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 	var rawPkg []byte
 	var err error
 	defer utils.RecoverHandler("on traffic", func(err, stack string) {
-		if e.logger != nil {
-			e.logger.Error(" on traffic err=" + err + ", stack=" + stack)
-		}
-		if e.trigger != nil {
-			e.trigger.ConnectionReceivedMessage(c, "error", "handle message failed:"+err, rawPkg)
-		}
+		e.serverErrorLog("on traffic panic, err=", err, ", stack=", stack)
+		e.triggerConnectionMessage(c, "error", "handle message failed, err="+err, rawPkg)
 	})
 
 	rqId := utils.GenLocalId("rq")
 	// Read the data
-	rawPkg, err = c.Read()
-	if err != nil {
-		e.log(c, rqId, "read failed, err="+err.Error(), zapcore.WarnLevel)
+	if rawPkg, err = c.Read(); err != nil {
+		e.log(c, rqId, "packaged read failed, err="+err.Error(), zapcore.WarnLevel)
+		e.triggerConnectionMessage(c, "error", "read message failed, err="+err.Error(), nil)
 		return
 	}
 	// Initialize the encryption and decryption key
@@ -237,30 +208,29 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 
 	// Unpacking a protocol package
 	err = e.codecDecode(c, initPackage, func(packedPkg []byte) {
-		e.log(c, rqId, "package received", zapcore.InfoLevel)
-		e.log(c, rqId, "package data", zapcore.DebugLevel, zap.ByteString("package", packedPkg))
+		e.log(c, rqId, "package: "+string(packedPkg), zapcore.DebugLevel, zap.ByteString("package", packedPkg))
 		// raw
 		if e.handleRaw(c, rqId, packedPkg) {
 			return
 		}
 		rqAction, respAction, rqData, respData, respPackage, err1 := e.handleMessage(c, rqId, packedPkg)
 		if err1 != nil {
-			e.log(c, rqId, "package handled: request action="+rqAction.String()+err1.Error(), zapcore.WarnLevel)
+			e.log(c, rqId, "action handled, request action="+rqAction.String()+", error="+err1.Error(), zapcore.WarnLevel)
 		} else {
-			e.log(c, rqId, "package handled: request action="+rqAction.String()+", response action="+respAction.String(), zapcore.InfoLevel)
-			e.log(c, rqId, "package handled data", zapcore.DebugLevel, zap.String("rq_action", rqAction.String()), zap.String("resp_action", respAction.String()), zap.ByteString("rq_data", rqData), zap.ByteString("resp_data", respData))
+			e.log(c, rqId, "action handled, request action="+rqAction.String()+", response action="+respAction.String(), zapcore.InfoLevel)
+			e.log(c, rqId, "action handled data", zapcore.DebugLevel, zap.String("rq_action", rqAction.String()), zap.String("resp_action", respAction.String()), zap.ByteString("rq_data", rqData), zap.ByteString("resp_data", respData))
 		}
 		if len(respPackage) > 0 {
 			if err1 = e.write(c, respPackage); err1 != nil {
 				e.log(c, rqId, err1.Error(), zapcore.ErrorLevel)
 			}
 		} else {
-			e.log(c, rqId, "no response", zapcore.InfoLevel)
+			e.log(c, rqId, "no response", zapcore.DebugLevel)
 		}
 	})
 	if err != nil {
-		e.log(c, rqId, "codec decode failed, err="+err.Error(), zapcore.WarnLevel)
-		e.log(c, rqId, "codec decode data", zapcore.DebugLevel, zap.ByteString("package", initPackage))
+		e.log(c, rqId, "package codec decode failed, err="+err.Error(), zapcore.WarnLevel)
+		e.log(c, rqId, "package codec decode data", zapcore.DebugLevel, zap.ByteString("package", initPackage))
 		if err = e.gatewayErrorResponse(c, rqId, gatewayv1.GatewayError_PackageErr, 0); err != nil {
 			e.log(c, rqId, err.Error(), zapcore.ErrorLevel)
 		}
@@ -270,7 +240,7 @@ func (e *Event) OnTraffic(_ *socket.Server, c socket.Conn) {
 func (e *Event) OnTick(s *socket.Server) (delay time.Duration) {
 	defer utils.RecoverHandler("on tick", func(err, stack string) {
 		if e.logger != nil {
-			e.logger.Error("on tick err=" + err + ", stack=" + stack)
+			e.logger.Error("on tick panic, err=" + err + ", stack=" + stack)
 		}
 	})
 	s.RangeConnections(func(c socket.Conn) bool {
@@ -293,10 +263,10 @@ func (e *Event) OnShutdown(s *socket.Server) {
 
 func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 	if c.Context().Authentication().Protocol != "" {
-		e.log(c, rqId, "start handle raw protocol:"+c.Context().Authentication().Protocol, zapcore.InfoLevel)
+		e.log(c, rqId, "package for raw protocol:"+c.Context().Authentication().Protocol, zapcore.InfoLevel)
 		decryptedData, decErr := e.decrypt(c, packedPkg)
 		if decErr != nil {
-			e.log(c, rqId, "decrypt data failed, err="+decErr.Error(), zapcore.ErrorLevel)
+			e.log(c, rqId, "decrypt data failed, err="+decErr.Error(), zapcore.WarnLevel)
 			return true
 		}
 		if respData, subActions, dispatchErr := e.am.Raw(c, rqId, e.internalDataCoder, c.Context().Authentication().Protocol, decryptedData, 0); dispatchErr != nil {
@@ -319,10 +289,6 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 				for _, subAction := range subActions {
 					e.log(c, rqId, "start handle sub action:"+strconv.Itoa(int(subAction.ActionId))+",target="+subAction.Target, zapcore.InfoLevel)
 					e.log(c, rqId, "sub action data", zapcore.DebugLevel, zap.ByteString("package", subAction.Data))
-					if subAction.ActionId <= 0 {
-						e.log(c, rqId, "sub action zero, ignored", zapcore.WarnLevel)
-						continue
-					}
 					subConn := c
 					if subAction.Target != "" {
 						conns := e.ss.GetAuthenticatedSnConn(subAction.Target)
@@ -336,6 +302,22 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 						e.log(c, rqId, "sub action no conn for target="+subAction.Target, zapcore.WarnLevel)
 						continue
 					}
+					if subAction.ActionId <= 0 {
+						if len(subAction.Data) > 0 {
+							e.log(subConn, rqId, "sub action zero, write out", zapcore.InfoLevel)
+							encryptedData, err := e.encrypt(subConn, subAction.Data)
+							if err != nil {
+								e.log(subConn, rqId, "raw output data encrypt failed"+err.Error(), zapcore.ErrorLevel)
+							} else {
+								if err1 := e.write(subConn, encryptedData); err1 != nil {
+									e.log(subConn, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
+								}
+							}
+							continue
+						}
+						e.log(subConn, rqId, "sub action zero, no data ignored", zapcore.WarnLevel)
+						continue
+					}
 
 					// dispatch
 					if subRespAct, subRespData, subErr := e.am.Dispatch(subConn, rqId, e.internalDataCoder, codec.ActionId(subAction.ActionId), subAction.Data); subErr != nil {
@@ -345,7 +327,7 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 						if subRespAct.Id > 0 {
 							e.log(c, rqId, "sub action out transfer start, out action="+strconv.Itoa(int(subRespAct.Id)), zapcore.InfoLevel)
 							// hande output
-							if subResp, _, subOutErr := e.am.Raw(subConn, rqId, e.internalDataCoder, subConn.Context().Authentication().Protocol, subRespData, uint32(subRespAct.Id)); subOutErr != nil {
+							if subResp, subActions1, subOutErr := e.am.Raw(subConn, rqId, e.internalDataCoder, subConn.Context().Authentication().Protocol, subRespData, uint32(subRespAct.Id)); subOutErr != nil {
 								e.log(c, rqId, "sub action out transfer failed,err="+subOutErr.Error(), zapcore.ErrorLevel)
 							} else {
 								if len(subResp) > 0 {
@@ -356,6 +338,33 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 									} else {
 										if err1 := e.write(c, encryptedDaa); err1 != nil {
 											e.log(c, rqId, "raw sub action write failed,err="+err1.Error(), zapcore.ErrorLevel)
+										}
+									}
+								}
+								if len(subActions1) > 0 {
+									for _, subAction1 := range subActions1 {
+										if subAction1.ActionId == 0 && len(subAction1.Data) > 0 {
+											subConn1 := c
+											if subAction1.Target != "" {
+												conns := e.ss.GetAuthenticatedSnConn(subAction1.Target)
+												if len(conns) > 0 {
+													subConn1 = conns[0]
+												} else {
+													subConn1 = nil
+												}
+											}
+											if subConn1 == nil {
+												e.log(c, rqId, "sub action no conn for target="+subAction1.Target, zapcore.WarnLevel)
+												continue
+											}
+											encryptedData, err := e.encrypt(subConn1, subAction1.Data)
+											if err != nil {
+												e.log(subConn1, rqId, "raw output data encrypt failed"+err.Error(), zapcore.ErrorLevel)
+											} else {
+												if err1 := e.write(subConn1, encryptedData); err1 != nil {
+													e.log(subConn1, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
+												}
+											}
 										}
 									}
 								}
@@ -452,7 +461,9 @@ func (e *Event) log(c socket.Conn, rqId, msg string, l zapcore.Level, data ...za
 	if e.logWatcher != nil {
 		e.logWatcher(c, msg, l, data...)
 	} else {
-		e.logger.Log(l, msg, data...)
+		if e.logger != nil {
+			e.logger.Log(l, msg, data...)
+		}
 	}
 	if e.trigger != nil {
 		var pkg []byte
@@ -493,19 +504,17 @@ func (e *Event) initCodec(c socket.Conn, rqId string, name codec.Name) {
 // 类型@标识@数据类型::RSA{es-key+10位时间戳} base64-stdEncode
 func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, response string, initPackage []byte, err error) {
 	defer runtimeutil.HandleRecover(func(errMsg, stack string) {
-		e.log(c, rqId, utils.ToStr("authenticate: err=", errMsg), zapcore.ErrorLevel)
+		e.serverErrorLog("authenticate panic, err=", errMsg, ", stack=", stack)
 		response = "222"
 	})
 	if !e.CryptoKeyInitialized(c) {
-		// 处理proxy
+		// proxy
 		if pkg = e.initProxy(pkg); len(pkg) == 0 {
 			return
 		}
 
-		fdTarget := strconv.Itoa(c.Fd())
-		if v, ok := c.Context().GetOptional("fd-target"); ok {
-			fdTarget = v.(string)
-		}
+		// authenticate limit
+		fdTarget := e.getConnLimitTarget(c)
 		if !e.authenticateLimiter.Access(fdTarget) {
 			hit = true
 			return
@@ -553,12 +562,11 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			codeType = e.defDataType
 			notAuthenticatePackage = true
 		}
-		e.log(c, rqId, "authenticate with type="+authentication.Type+",id="+authentication.Id+",dataType="+codeType.String(), zapcore.InfoLevel)
+		e.log(c, rqId, "authenticate type="+authentication.Type+",target="+authentication.Id+",dataType="+codeType.String(), zapcore.InfoLevel)
 
 		var keys []byte
 		secret := string(pkg)
 		if !e.Security() || e.commonCertForAll {
-			e.log(c, rqId, "authenticate without security", zapcore.InfoLevel)
 			secret = ""
 		}
 		noCert := false
@@ -567,23 +575,23 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			return
 		}
 		if string(keys) == "NO_CERT" {
-			e.log(c, rqId, "authenticate target no cert, ignored security parse", zapcore.InfoLevel)
+			e.log(c, rqId, "authenticate target no cert, ignored security", zapcore.InfoLevel)
 			noCert = true
 			keys = nil
 		}
 
 		var key []byte
 		if e.Security() && !noCert {
-			e.log(c, rqId, "authenticate validate security key", zapcore.InfoLevel)
+			e.log(c, rqId, "authenticate validate security key", zapcore.DebugLevel)
 			if e.commonCertForAll {
-				e.log(c, rqId, "authenticate with common security key", zapcore.InfoLevel)
+				e.log(c, rqId, "authenticate with common security key", zapcore.DebugLevel)
 				keys, err = e.rsa.Decrypt(pkg, e.commonPrivateKey, true)
 				if err != nil {
 					response = "222"
 					return
 				}
 			}
-			e.log(c, rqId, "authenticate parse input security key", zapcore.InfoLevel)
+			e.log(c, rqId, "authenticate parse input security key", zapcore.DebugLevel)
 			if len(keys) != e.es.Type().KeyLen()+10 {
 				response = "222"
 				err = errors.New("invalid crypt key length")
@@ -605,7 +613,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			}
 			response = "111"
 		} else {
-			e.log(c, rqId, "authenticate without security key", zapcore.InfoLevel)
+			e.log(c, rqId, "authenticate without security key", zapcore.DebugLevel)
 			key = []byte("")
 			response = "000"
 			if notAuthenticatePackage {
@@ -632,11 +640,11 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 					}
 				} else {
 					// 纯id 需要后续认证
-					e.log(c, rqId, "authenticate without user, need auth next", zapcore.InfoLevel)
+					e.log(c, rqId, "authenticate without user, need auth next", zapcore.DebugLevel)
 				}
 			}
 		} else {
-			e.log(c, rqId, "authenticate with system user", zapcore.InfoLevel)
+			e.log(c, rqId, "authenticate with system user", zapcore.DebugLevel)
 			user = e.defaultUser
 		}
 
@@ -644,7 +652,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 			// 验证是否已（当前、其他）
 			cc := e.ss.GetAuthenticatedConn(authentication.Id)
 			for _, ccc := range cc {
-				e.log(c, rqId, utils.ToStr("authenticate closed exist client:"+strconv.Itoa(ccc.Fd())), zapcore.InfoLevel)
+				e.log(c, rqId, utils.ToStr("authenticate closed exist client:"+strconv.Itoa(ccc.Fd())), zapcore.DebugLevel)
 				ccc.Close()
 			}
 			for _, gw := range e.ss.GwManager().Get("gateway") {
@@ -672,7 +680,7 @@ func (e *Event) authenticate(c socket.Conn, rqId string, pkg []byte) (hit bool, 
 		}
 		e.SetCryptoKey(c, key)
 		if len(key) > 0 {
-			e.log(c, rqId, "authenticate with security", zapcore.InfoLevel)
+			e.log(c, rqId, "authenticate withed security", zapcore.InfoLevel)
 		}
 		e.initCodec(c, rqId, codeType)
 		for _, fn := range e.authenticatedCallbacks {
@@ -972,4 +980,59 @@ func (e *Event) ActionManager() *action.Manager {
 
 func (e *Event) InternalDataCoder() codec.DataBuilder {
 	return e.internalDataCoder
+}
+
+func (e *Event) SocketServer() *socket.Server {
+	return e.ss
+}
+
+func (e *Event) triggerConnectionJoin(c socket.Conn) {
+	if e.trigger != nil {
+		e.trigger.ConnectionJoin(c)
+	}
+}
+
+func (e *Event) triggerConnectionLeave(c socket.Conn) {
+	if e.trigger != nil {
+		e.trigger.ConnectionLeave(c)
+	}
+}
+
+func (e *Event) triggerConnectionMessage(c socket.Conn, level string, desc string, data []byte) {
+	if e.trigger != nil {
+		e.trigger.ConnectionReceivedMessage(c, level, desc, data)
+	}
+}
+
+func (e *Event) serverErrorLog(msg ...string) {
+	if e.logger != nil {
+		e.logger.Error(utils.ToStr(msg...))
+	}
+}
+
+func (e *Event) serverInfoLog(msg ...string) {
+	if e.logger != nil {
+		e.logger.Info(utils.ToStr(msg...))
+	}
+}
+
+func (e *Event) getConnLimitTarget(c socket.Conn) string {
+	fdTarget := strconv.Itoa(c.Fd())
+	if v, ok := c.Context().GetOptional("fd-target"); ok {
+		fdTarget = v.(string)
+	}
+	return fdTarget
+}
+
+func (e *Event) getCloseReason(c socket.Conn, err error) string {
+	reason := ""
+	if err != nil {
+		reason = err.Error()
+	} else {
+		reason = connutil.GetCloseReason(c)
+		if reason == "" {
+			reason = "unknown"
+		}
+	}
+	return reason
 }

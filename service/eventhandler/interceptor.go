@@ -1,6 +1,9 @@
 package eventhandler
 
-import "github.com/obnahsgnaw/socketgateway/pkg/socket"
+import (
+	"github.com/obnahsgnaw/socketgateway/pkg/socket"
+	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
+)
 
 type HandleFunc func(conn socket.Conn, pkg []byte) ([]byte, error)
 
@@ -62,9 +65,12 @@ func (e *Event) sendIntercept(conn socket.Conn, pkg []byte) (newPkg []byte, err 
 	return
 }
 
-func (e *Event) openIntercept() error {
+func (e *Event) openIntercept(c socket.Conn) {
 	if e.openInterceptor == nil {
-		return nil
+		return
 	}
-	return e.openInterceptor()
+	if err := e.openInterceptor(); err != nil {
+		connutil.SetCloseReason(c, "close by interceptor: "+err.Error())
+		c.Close()
+	}
 }

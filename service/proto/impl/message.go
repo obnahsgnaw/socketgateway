@@ -2,6 +2,7 @@ package impl
 
 import (
 	"context"
+	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
 	messagev1 "github.com/obnahsgnaw/socketapi/gen/message/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler"
@@ -74,13 +75,36 @@ func (gw *MessageService) SendMessage(ctx context.Context, in *messagev1.SendMes
 		coderName := connutil.CoderName(c)
 		var msg []byte
 		if c.Context().Authentication().Protocol != "" {
-			if msg, _, lastErr = gw.e().ActionManager().Raw(c, rqId, gw.e().InternalDataCoder(), c.Context().Authentication().Protocol, in.PbMessage, in.ActionId); lastErr != nil {
+			var subActions []*handlerv1.SubAction
+			if msg, subActions, lastErr = gw.e().ActionManager().Raw(c, rqId, gw.e().InternalDataCoder(), c.Context().Authentication().Protocol, in.PbMessage, in.ActionId); lastErr != nil {
 				continue
 			}
 			if err = gw.e().SendRaw(c, msg); err != nil {
 				lastErr = status.New(codes.Internal, "send raw message failed, err="+err.Error()).Err()
 			} else {
 				send = true
+			}
+			for _, subAction := range subActions {
+				if subAction.ActionId == 0 && len(subAction.Data) > 0 {
+					subConn := c
+					if subAction.Target != "" {
+						conns := gw.e().SocketServer().GetAuthenticatedSnConn(subAction.Target)
+						if len(conns) > 0 {
+							subConn = conns[0]
+						} else {
+							subConn = nil
+						}
+					}
+					if subConn == nil {
+						lastErr = status.New(codes.Internal, "send raw message failed, err=sub target conn not found").Err()
+						continue
+					}
+					if err = gw.e().SendRaw(subConn, subAction.Data); err != nil {
+						lastErr = status.New(codes.Internal, "send raw message failed, err="+err.Error()).Err()
+					} else {
+						send = true
+					}
+				}
 			}
 		} else {
 			if coderName == codec.Proto {

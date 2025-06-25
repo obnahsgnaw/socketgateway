@@ -20,10 +20,11 @@ type RemoteHandler struct {
 func NewRemoteHandler(ctx context.Context, l *zap.Logger, businessChannel string) *RemoteHandler {
 	m := rpcclient.NewManager()
 	m.RegisterAfterHandler(func(ctx context.Context, head rpcclient.Header, method string, req, reply interface{}, cc *grpc.ClientConn, err error, opts ...grpc.CallOption) {
+		desc := utils.ToStr("[rqId=", head.RqId, ",from=", head.From, ",to=", head.To, "."+method, "]")
 		if err != nil {
-			l.Error(utils.ToStr(head.RqId, " ", head.From, " rpc call ", head.To, " socket-handler[", method, "] failed,", err.Error()), zap.Any("rq_id", head.RqId), zap.Any("req", req), zap.Any("resp", reply))
+			l.Warn(utils.ToStr("remote socket handler call ", desc, " failed, err=", err.Error()), zap.Any("rq_id", head.RqId), zap.Any("req", req), zap.Any("resp", reply))
 		} else {
-			l.Debug(utils.ToStr(head.RqId, " ", head.From, " rpc call ", head.To, " socket-handler[", method, "] success"), zap.Any("rq_id", head.RqId), zap.Any("req", req), zap.Any("resp", reply))
+			l.Debug(utils.ToStr("remote socket handler call ", desc, " success"), zap.Any("rq_id", head.RqId), zap.Any("req", req), zap.Any("resp", reply))
 		}
 	})
 	return &RemoteHandler{ctx: ctx, manager: m, businessChannel: businessChannel}
