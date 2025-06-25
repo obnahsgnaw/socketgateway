@@ -1,4 +1,316 @@
 
+<a name="v0.28.17"></a>
+## [v0.28.17](https://8.140.161.172/wangsb/wgateway/compare/v0.28.16...v0.28.17) (2025-06-25)
+
+
+<a name="v0.28.16"></a>
+## [v0.28.16](https://8.140.161.172/wangsb/wgateway/compare/v0.28.15...v0.28.16) (2025-06-12)
+
+
+<a name="v0.28.15"></a>
+## [v0.28.15](https://8.140.161.172/wangsb/wgateway/compare/v0.28.14...v0.28.15) (2025-06-06)
+
+
+<a name="v0.28.14"></a>
+## [v0.28.14](https://8.140.161.172/wangsb/wgateway/compare/v0.28.13...v0.28.14) (2025-05-26)
+
+
+<a name="v0.28.13"></a>
+## [v0.28.13](https://8.140.161.172/wangsb/wgateway/compare/v0.28.12...v0.28.13) (2025-05-26)
+
+
+<a name="v0.28.12"></a>
+## [v0.28.12](https://8.140.161.172/wangsb/wgateway/compare/v0.28.11...v0.28.12) (2025-05-23)
+
+
+<a name="v0.28.11"></a>
+## [v0.28.11](https://8.140.161.172/wangsb/wgateway/compare/v0.28.10...v0.28.11) (2025-05-19)
+
+
+<a name="v0.28.10"></a>
+## [v0.28.10](https://8.140.161.172/wangsb/wgateway/compare/v0.28.9...v0.28.10) (2025-05-19)
+
+
+<a name="v0.28.9"></a>
+## [v0.28.9](https://8.140.161.172/wangsb/wgateway/compare/v0.28.8...v0.28.9) (2025-05-19)
+
+
+<a name="v0.28.8"></a>
+## [v0.28.8](https://8.140.161.172/wangsb/wgateway/compare/v0.28.7...v0.28.8) (2025-05-16)
+
+
+<a name="v0.28.7"></a>
+## [v0.28.7](https://8.140.161.172/wangsb/wgateway/compare/v0.28.6...v0.28.7) (2025-05-16)
+
+
+<a name="v0.28.6"></a>
+## [v0.28.6](https://8.140.161.172/wangsb/wgateway/compare/v0.28.5...v0.28.6) (2025-05-16)
+
+
+<a name="v0.28.5"></a>
+## [v0.28.5](https://8.140.161.172/wangsb/wgateway/compare/v0.28.4...v0.28.5) (2025-05-14)
+
+
+<a name="v0.28.4"></a>
+## [v0.28.4](https://8.140.161.172/wangsb/wgateway/compare/v0.28.3...v0.28.4) (2025-05-14)
+
+
+<a name="v0.28.3"></a>
+## [v0.28.3](https://8.140.161.172/wangsb/wgateway/compare/v0.28.2...v0.28.3) (2025-05-07)
+
+
+<a name="v0.28.2"></a>
+## [v0.28.2](https://8.140.161.172/wangsb/wgateway/compare/v0.28.1...v0.28.2) (2025-05-07)
+
+
+<a name="v0.28.1"></a>
+## [v0.28.1](https://8.140.161.172/wangsb/wgateway/compare/v0.28.0...v0.28.1) (2025-05-07)
+
+
+<a name="v0.28.0"></a>
+## [v0.28.0](https://8.140.161.172/wangsb/wgateway/compare/v0.27.1...v0.28.0) (2025-04-29)
+
+### Features
+
+* **all:** remove master
+
+
+<a name="v0.27.1"></a>
+## [v0.27.1](https://8.140.161.172/wangsb/wgateway/compare/v0.27.0...v0.27.1) (2025-04-29)
+
+
+<a name="v0.27.0"></a>
+## [v0.27.0](https://8.140.161.172/wangsb/wgateway/compare/v0.26.3...v0.27.0) (2025-04-27)
+
+### Features
+
+* **event:** added session
+
+
+<a name="v0.26.3"></a>
+## [v0.26.3](https://8.140.161.172/wangsb/wgateway/compare/v0.26.2...v0.26.3) (2025-04-23)
+
+
+<a name="v0.26.2"></a>
+## [v0.26.2](https://8.140.161.172/wangsb/wgateway/compare/v0.26.1...v0.26.2) (2025-04-23)
+
+
+<a name="v0.26.1"></a>
+## [v0.26.1](https://8.140.161.172/wangsb/wgateway/compare/v0.26.0...v0.26.1) (2025-04-17)
+
+
+<a name="v0.26.0"></a>
+## [v0.26.0](https://8.140.161.172/wangsb/wgateway/compare/v0.25.10...v0.26.0) (2025-04-14)
+
+### Features
+
+* **engine:** added business channel support,added http mqtt custom engine
+
+
+<a name="v0.25.10"></a>
+## [v0.25.10](https://8.140.161.172/wangsb/wgateway/compare/v0.25.9...v0.25.10) (2025-03-26)
+
+
+<a name="v0.25.9"></a>
+## [v0.25.9](https://8.140.161.172/wangsb/wgateway/compare/v0.25.8...v0.25.9) (2025-03-13)
+
+
+<a name="v0.25.8"></a>
+## [v0.25.8](https://8.140.161.172/wangsb/wgateway/compare/v0.25.7...v0.25.8) (2025-02-26)
+
+
+<a name="v0.25.7"></a>
+## [v0.25.7](https://8.140.161.172/wangsb/wgateway/compare/v0.25.6...v0.25.7) (2025-02-26)
+
+
+<a name="v0.25.6"></a>
+## [v0.25.6](https://8.140.161.172/wangsb/wgateway/compare/v0.25.5...v0.25.6) (2025-02-18)
+
+
+<a name="v0.25.5"></a>
+## [v0.25.5](https://8.140.161.172/wangsb/wgateway/compare/v0.25.4...v0.25.5) (2025-02-17)
+
+
+<a name="v0.25.4"></a>
+## [v0.25.4](https://8.140.161.172/wangsb/wgateway/compare/v0.25.3...v0.25.4) (2025-02-17)
+
+
+<a name="v0.25.3"></a>
+## [v0.25.3](https://8.140.161.172/wangsb/wgateway/compare/v0.25.2...v0.25.3) (2025-02-17)
+
+
+<a name="v0.25.2"></a>
+## [v0.25.2](https://8.140.161.172/wangsb/wgateway/compare/v0.25.1...v0.25.2) (2025-02-14)
+
+
+<a name="v0.25.1"></a>
+## [v0.25.1](https://8.140.161.172/wangsb/wgateway/compare/v0.25.0...v0.25.1) (2025-02-13)
+
+
+<a name="v0.25.0"></a>
+## [v0.25.0](https://8.140.161.172/wangsb/wgateway/compare/v0.24.44...v0.25.0) (2025-02-13)
+
+
+<a name="v0.24.44"></a>
+## [v0.24.44](https://8.140.161.172/wangsb/wgateway/compare/v0.24.43...v0.24.44) (2025-01-23)
+
+
+<a name="v0.24.43"></a>
+## [v0.24.43](https://8.140.161.172/wangsb/wgateway/compare/v0.24.42...v0.24.43) (2025-01-20)
+
+
+<a name="v0.24.42"></a>
+## [v0.24.42](https://8.140.161.172/wangsb/wgateway/compare/v0.24.41...v0.24.42) (2025-01-20)
+
+
+<a name="v0.24.41"></a>
+## [v0.24.41](https://8.140.161.172/wangsb/wgateway/compare/v0.24.40...v0.24.41) (2025-01-20)
+
+
+<a name="v0.24.40"></a>
+## [v0.24.40](https://8.140.161.172/wangsb/wgateway/compare/v0.24.39...v0.24.40) (2025-01-16)
+
+
+<a name="v0.24.39"></a>
+## [v0.24.39](https://8.140.161.172/wangsb/wgateway/compare/v0.24.38...v0.24.39) (2025-01-16)
+
+
+<a name="v0.24.38"></a>
+## [v0.24.38](https://8.140.161.172/wangsb/wgateway/compare/v0.24.37...v0.24.38) (2025-01-13)
+
+
+<a name="v0.24.37"></a>
+## [v0.24.37](https://8.140.161.172/wangsb/wgateway/compare/v0.24.36...v0.24.37) (2025-01-09)
+
+
+<a name="v0.24.36"></a>
+## [v0.24.36](https://8.140.161.172/wangsb/wgateway/compare/v0.24.35...v0.24.36) (2025-01-07)
+
+
+<a name="v0.24.35"></a>
+## [v0.24.35](https://8.140.161.172/wangsb/wgateway/compare/v0.24.34...v0.24.35) (2025-01-03)
+
+### Bug Fixes
+
+* **udp:** x
+
+
+<a name="v0.24.34"></a>
+## [v0.24.34](https://8.140.161.172/wangsb/wgateway/compare/v0.24.33...v0.24.34) (2024-12-31)
+
+
+<a name="v0.24.33"></a>
+## [v0.24.33](https://8.140.161.172/wangsb/wgateway/compare/v0.24.32...v0.24.33) (2024-12-30)
+
+
+<a name="v0.24.32"></a>
+## [v0.24.32](https://8.140.161.172/wangsb/wgateway/compare/v0.24.31...v0.24.32) (2024-12-30)
+
+
+<a name="v0.24.31"></a>
+## [v0.24.31](https://8.140.161.172/wangsb/wgateway/compare/v0.24.30...v0.24.31) (2024-12-28)
+
+
+<a name="v0.24.30"></a>
+## [v0.24.30](https://8.140.161.172/wangsb/wgateway/compare/v0.24.29...v0.24.30) (2024-12-27)
+
+
+<a name="v0.24.29"></a>
+## [v0.24.29](https://8.140.161.172/wangsb/wgateway/compare/v0.24.28...v0.24.29) (2024-12-27)
+
+
+<a name="v0.24.28"></a>
+## [v0.24.28](https://8.140.161.172/wangsb/wgateway/compare/v0.24.27...v0.24.28) (2024-12-27)
+
+
+<a name="v0.24.27"></a>
+## [v0.24.27](https://8.140.161.172/wangsb/wgateway/compare/v0.24.26...v0.24.27) (2024-12-26)
+
+
+<a name="v0.24.26"></a>
+## [v0.24.26](https://8.140.161.172/wangsb/wgateway/compare/v0.24.25...v0.24.26) (2024-12-26)
+
+
+<a name="v0.24.25"></a>
+## [v0.24.25](https://8.140.161.172/wangsb/wgateway/compare/v0.24.24...v0.24.25) (2024-12-26)
+
+
+<a name="v0.24.24"></a>
+## [v0.24.24](https://8.140.161.172/wangsb/wgateway/compare/v0.24.23...v0.24.24) (2024-12-26)
+
+
+<a name="v0.24.23"></a>
+## [v0.24.23](https://8.140.161.172/wangsb/wgateway/compare/v0.24.22...v0.24.23) (2024-12-24)
+
+
+<a name="v0.24.22"></a>
+## [v0.24.22](https://8.140.161.172/wangsb/wgateway/compare/v0.24.21...v0.24.22) (2024-12-23)
+
+
+<a name="v0.24.21"></a>
+## [v0.24.21](https://8.140.161.172/wangsb/wgateway/compare/v0.24.20...v0.24.21) (2024-12-20)
+
+
+<a name="v0.24.20"></a>
+## [v0.24.20](https://8.140.161.172/wangsb/wgateway/compare/v0.24.19...v0.24.20) (2024-12-19)
+
+
+<a name="v0.24.19"></a>
+## [v0.24.19](https://8.140.161.172/wangsb/wgateway/compare/v0.24.18...v0.24.19) (2024-12-18)
+
+
+<a name="v0.24.18"></a>
+## [v0.24.18](https://8.140.161.172/wangsb/wgateway/compare/v0.24.17...v0.24.18) (2024-12-09)
+
+
+<a name="v0.24.17"></a>
+## [v0.24.17](https://8.140.161.172/wangsb/wgateway/compare/v0.24.16...v0.24.17) (2024-11-30)
+
+### Bug Fixes
+
+* **proxy:** x
+
+
+<a name="v0.24.16"></a>
+## [v0.24.16](https://8.140.161.172/wangsb/wgateway/compare/v0.24.15...v0.24.16) (2024-11-30)
+
+### Bug Fixes
+
+* **event option:** fix authEnabled
+
+
+<a name="v0.24.15"></a>
+## [v0.24.15](https://8.140.161.172/wangsb/wgateway/compare/v0.24.14...v0.24.15) (2024-11-19)
+
+
+<a name="v0.24.14"></a>
+## [v0.24.14](https://8.140.161.172/wangsb/wgateway/compare/v0.24.13...v0.24.14) (2024-11-18)
+
+### Bug Fixes
+
+* **proxy:** fix init check no return
+
+
+<a name="v0.24.13"></a>
+## [v0.24.13](https://8.140.161.172/wangsb/wgateway/compare/v0.24.12...v0.24.13) (2024-11-07)
+
+
+<a name="v0.24.12"></a>
+## [v0.24.12](https://8.140.161.172/wangsb/wgateway/compare/v0.24.11...v0.24.12) (2024-11-07)
+
+
+<a name="v0.24.11"></a>
+## [v0.24.11](https://8.140.161.172/wangsb/wgateway/compare/v0.24.10...v0.24.11) (2024-11-06)
+
+
+<a name="v0.24.10"></a>
+## [v0.24.10](https://8.140.161.172/wangsb/wgateway/compare/v0.24.9...v0.24.10) (2024-11-02)
+
+
+<a name="v0.24.9"></a>
+## [v0.24.9](https://8.140.161.172/wangsb/wgateway/compare/v0.24.8...v0.24.9) (2024-11-01)
+
+
 <a name="v0.24.8"></a>
 ## [v0.24.8](https://8.140.161.172/wangsb/wgateway/compare/v0.24.7...v0.24.8) (2024-10-24)
 
