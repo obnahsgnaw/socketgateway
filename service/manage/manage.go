@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// Manager the connection
 type Manager struct {
 	s                 *socket.Server
 	config            *GwConfig
@@ -17,13 +18,12 @@ type Manager struct {
 	fdMessageListener func(*Message)
 	sender            func(c socket.Conn, act codec.Action, pkg []byte) error
 }
-type Trigger struct {
-	s *Manager
-}
+
 type Gateway struct {
 	Protocol string    `json:"protocol"`
 	Config   *GwConfig `json:"config"`
 }
+
 type GwConfig struct {
 	Port              int    `json:"port"`
 	RpcPort           int    `json:"rpc_port"`
@@ -37,6 +37,7 @@ type GwConfig struct {
 	SecurityEncoder   string `json:"security_encoder"`
 	SecurityEncode    bool   `json:"security_encode"`
 }
+
 type Connection struct {
 	Fd             int       `json:"fd"`
 	RemoteAddr     string    `json:"remote_addr"`
@@ -47,27 +48,6 @@ type Connection struct {
 	User           *socket.AuthUser
 	Binds          map[string]string
 }
-type MsgType int
-
-func (t MsgType) String() string {
-	if t == Send {
-		return "send"
-	}
-	return "received"
-}
-
-const (
-	Send    MsgType = 1
-	Receive MsgType = 2
-)
-
-type Message struct {
-	Fd      int
-	Type    MsgType `json:"type"`
-	Level   string  `json:"level"`
-	Desc    string  `json:"desc"`
-	Package []byte  `json:"package"`
-}
 
 func New(protocol string, s *socket.Server, config *GwConfig, sender func(c socket.Conn, act codec.Action, pkg []byte) error) *Manager {
 	m := &Manager{
@@ -77,46 +57,6 @@ func New(protocol string, s *socket.Server, config *GwConfig, sender func(c sock
 		sender:   sender,
 	}
 	return m
-}
-
-func NewTrigger(m *Manager) *Trigger {
-	return &Trigger{m}
-}
-
-func (m *Trigger) ConnectionJoin(c socket.Conn) {
-	if m.s.onofflineListener != nil {
-		m.s.onofflineListener(m.s.toConnection(c), true)
-	}
-}
-
-func (m *Trigger) ConnectionLeave(c socket.Conn) {
-	if m.s.onofflineListener != nil {
-		m.s.onofflineListener(m.s.toConnection(c), false)
-	}
-}
-
-func (m *Trigger) ConnectionReceivedMessage(c socket.Conn, level string, desc string, data []byte) {
-	if m.s.fdMessageListener != nil {
-		m.s.fdMessageListener(&Message{
-			Fd:      c.Fd(),
-			Type:    Receive,
-			Level:   level,
-			Desc:    desc,
-			Package: data,
-		})
-	}
-}
-
-func (m *Trigger) ConnectionSentMessage(c socket.Conn, level string, desc string, data []byte) {
-	if m.s.fdMessageListener != nil {
-		m.s.fdMessageListener(&Message{
-			Fd:      c.Fd(),
-			Type:    Send,
-			Level:   level,
-			Desc:    desc,
-			Package: data,
-		})
-	}
 }
 
 func (m *Manager) Gateway() *Gateway {
