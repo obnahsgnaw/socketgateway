@@ -35,8 +35,8 @@ type Server struct {
 	groups       *group.Groups
 	engine       Engine
 	connections  sync.Map // map[int]Conn
-	connIdBinds  sync.Map // map[string]map[int]struct{}
-	relatedBinds sync.Map // map[string][]string
+	connIdBinds  *IDManager
+	relatedBinds *SIDManager
 	watchClient  *rpcclient.Manager
 }
 
@@ -50,6 +50,9 @@ func New(ctx context.Context, t sockettype.SocketType, p int, e Engine, event Ev
 		config:      c,
 		groups:      group.New(),
 		watchClient: watchClient,
+
+		connIdBinds:  newIDManager(),
+		relatedBinds: newSIDManager(),
 	}
 	s.event = newCountedEvent(s, event)
 
@@ -108,27 +111,13 @@ func (s *Server) Stop() {
 func (s *Server) BindId(c Conn, id ConnId) {
 	if id.Type != "" && id.Id != "" && c.Fd() > 0 {
 		c.Context().bind(id)
-		if v, ok := s.connIdBinds.Load(id.String()); ok {
-			vv := v.(map[int]struct{})
-			vv[c.Fd()] = struct{}{}
-			s.connIdBinds.Store(id.String(), vv)
-		} else {
-			s.connIdBinds.Store(id.String(), map[int]struct{}{c.Fd(): {}})
-		}
+		s.connIdBinds.Add(id.String(), c.Fd())
 	}
 }
 
 func (s *Server) UnbindId(c Conn, id ConnId) {
 	if id.Type != "" && id.Id != "" {
-		if v, ok := s.connIdBinds.Load(id.String()); ok {
-			vv := v.(map[int]struct{})
-			delete(vv, c.Fd())
-			if len(vv) == 0 {
-				s.connIdBinds.Delete(id.String())
-			} else {
-				s.connIdBinds.Store(id.String(), vv)
-			}
-		}
+		s.delIdFd(id, c.Fd())
 		c.Context().unbind(id)
 	}
 }
@@ -137,18 +126,14 @@ func (s *Server) UnbindTypedId(c Conn, typ string) {
 	if typ != "" {
 		id := c.Context().TypedId(typ)
 		if id.Id != "" {
-			if v, ok := s.connIdBinds.Load(id.String()); ok {
-				vv := v.(map[int]struct{})
-				delete(vv, c.Fd())
-				if len(vv) == 0 {
-					s.connIdBinds.Delete(id.String())
-				} else {
-					s.connIdBinds.Store(id.String(), vv)
-				}
-			}
+			s.delIdFd(id, c.Fd())
 			c.Context().unbind(id)
 		}
 	}
+}
+
+func (s *Server) delIdFd(id ConnId, fd int) {
+	s.connIdBinds.Del(id.String(), fd)
 }
 
 func (s *Server) GetFdConn(fd int) Conn {
@@ -159,19 +144,12 @@ func (s *Server) GetFdConn(fd int) Conn {
 }
 
 func (s *Server) GetIdConn(id ConnId) (list []Conn) {
-	if v, ok := s.connIdBinds.Load(id.String()); ok {
-		fds := v.(map[int]struct{})
-		for fd := range fds {
-			if c := s.GetFdConn(fd); c != nil {
-				list = append(list, c)
-			} else {
-				delete(fds, fd)
-			}
-		}
-		if len(fds) == 0 {
-			s.connIdBinds.Delete(id.String())
+	fds := s.connIdBinds.Get(id.String())
+	for _, fd := range fds {
+		if c := s.GetFdConn(fd); c != nil {
+			list = append(list, c)
 		} else {
-			s.connIdBinds.Store(id.String(), fds)
+			s.connIdBinds.Del(id.String(), fd)
 		}
 	}
 	return
@@ -193,15 +171,7 @@ func (s *Server) delConn(c Conn) {
 	if c.Fd() > 0 {
 		s.connections.Delete(c.Fd())
 		c.Context().RangeId(func(id ConnId) {
-			if v, ok := s.connIdBinds.Load(id.String()); ok {
-				vv := v.(map[int]struct{})
-				delete(vv, c.Fd())
-				if len(vv) == 0 {
-					s.connIdBinds.Delete(id.String())
-				} else {
-					s.connIdBinds.Store(id.String(), vv)
-				}
-			}
+			s.delIdFd(id, c.Fd())
 		})
 		au := c.Context().Authentication()
 		if au != nil {
@@ -216,38 +186,21 @@ func (s *Server) delConn(c Conn) {
 }
 
 func (s *Server) BindRelate(c Conn, master, id string) {
-	if v, ok := s.relatedBinds.Load(master); ok {
-		vv := v.([]string)
-		vv = append(vv, id+"@"+strconv.Itoa(c.Fd()))
-		s.relatedBinds.Store(master, vv)
-	} else {
-		s.relatedBinds.Store(master, []string{id + "@" + strconv.Itoa(c.Fd())})
-	}
+	s.relatedBinds.Add(master, id+"@"+strconv.Itoa(c.Fd()))
 }
 
 func (s *Server) UnbindRelate(c Conn, master, id string) {
-	if v, ok := s.relatedBinds.Load(master); ok {
-		vv := v.([]string)
-		var vv1 []string
-		for _, v1 := range vv {
-			if v1 != id+"@"+strconv.Itoa(c.Fd()) {
-				vv1 = append(vv1, v1)
-			}
-		}
-		s.relatedBinds.Store(master, vv1)
-	}
+	s.relatedBinds.Del(master, id+"@"+strconv.Itoa(c.Fd()))
 }
 
 func (s *Server) GetRelatedConn(master string) []Conn {
 	var cc []Conn
-	if v, ok := s.relatedBinds.Load(master); ok {
-		vv := v.([]string)
-		for _, v1 := range vv {
-			v2 := strings.Split(v1, "@")[0]
-			c1 := s.GetIdConn(ConnId{Id: v2, Type: "TARGET"})
-			if c1 != nil {
-				cc = append(cc, c1...)
-			}
+	ids := s.relatedBinds.Get(master)
+	for _, v1 := range ids {
+		v2 := strings.Split(v1, "@")[0]
+		c1 := s.GetIdConn(ConnId{Id: v2, Type: "TARGET"})
+		if c1 != nil {
+			cc = append(cc, c1...)
 		}
 	}
 	return cc
@@ -295,22 +248,16 @@ func (s *Server) Authenticate(c Conn, u *Authentication) {
 
 func (s *Server) GetAuthenticatedConn(id string) (list []Conn) {
 	cc := ConnId{Id: id, Type: "TARGET"}
-	if v, ok := s.connIdBinds.Load(cc.String()); ok {
-		fds := v.(map[int]struct{})
-		for fd := range fds {
-			if c := s.GetFdConn(fd); c != nil {
-				list = append(list, c)
-			} else {
-				delete(fds, fd)
-			}
-		}
-		if len(fds) == 0 {
-			s.connIdBinds.Delete(cc.String())
+
+	fds := s.connIdBinds.Get(cc.String())
+	for fd := range fds {
+		if c := s.GetFdConn(fd); c != nil {
+			list = append(list, c)
 		} else {
-			s.connIdBinds.Store(cc.String(), fds)
+			s.connIdBinds.Del(cc.String(), fd)
 		}
 	}
-	return nil
+	return
 }
 
 func (s *Server) GwManager() *rpcclient.Manager {
