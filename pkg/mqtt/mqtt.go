@@ -4,6 +4,7 @@ import (
 	"errors"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"regexp"
+	"time"
 )
 
 type Qos byte
@@ -19,12 +20,13 @@ const (
 )
 
 type Client struct {
-	client     mqtt.Client
-	address    string
-	username   string
-	password   string
-	clientID   string
-	msgHandler MessageHandler
+	client      mqtt.Client
+	address     string
+	username    string
+	password    string
+	clientID    string
+	msgHandler  MessageHandler
+	recInterval time.Duration
 }
 
 type Message interface {
@@ -56,7 +58,8 @@ type MessageHandler func(*Client, Message)
 // New tcpAddr tcp://ip:port
 func New(tcpAddr string, o ...Option) *Client {
 	s := &Client{
-		address: tcpAddr,
+		address:     tcpAddr,
+		recInterval: time.Second * 10,
 	}
 	s.With(o...)
 	return s
@@ -87,6 +90,8 @@ func (c *Client) Connect() error {
 			c.msgHandler(c, newMessage(msg, nil))
 		}
 	}
+	opts.SetAutoReconnect(true)
+	opts.SetMaxReconnectInterval(c.recInterval)
 	c.client = mqtt.NewClient(opts)
 	if token := c.client.Connect(); token.Wait() && token.Error() != nil {
 		return token.Error()
