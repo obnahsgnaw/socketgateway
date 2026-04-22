@@ -23,6 +23,7 @@ type Manager struct {
 	rawActions          sync.Map // map[protocolType]codec.ActionId
 	remoteHandler       RemoteHandler
 	gateway             url.Host
+	rfFn                func()
 }
 
 type actionHandler struct {
@@ -188,11 +189,21 @@ func (m *Manager) getFlbServers(actionId codec.ActionId) (list map[string]string
 	return
 }
 
+func (m *Manager) Refresh(fn func()) {
+	m.rfFn = fn
+}
+
 func (m *Manager) getRandServer(actionId codec.ActionId) string {
 	list := m.getServers(actionId)
 
 	if len(list) == 0 {
-		return ""
+		if m.rfFn != nil {
+			m.rfFn()
+		}
+		list = m.getServers(actionId)
+		if len(list) == 0 {
+			return ""
+		}
 	}
 	return list[utils.RandInt(len(list))]
 }

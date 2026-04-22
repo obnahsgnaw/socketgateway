@@ -550,6 +550,38 @@ func (s *Server) watch(register regCenter.Register) error {
 	if err != nil {
 		return err
 	}
+	s.actManager.Refresh(func() {
+		s.logger.Debug("triggering action refresh")
+		err1 := register.Fetch(s.app.Context(), handlerPrefix, func(key string, val string, isDel bool) {
+			segments := strings.Split(key, "/")
+			id := segments[len(segments)-3]
+			host := segments[len(segments)-2]
+			actionStr := segments[len(segments)-1]
+			actionId, _ := strconv.Atoi(actionStr)
+			idSegments := strings.Split(id, "-")
+			moduleName := idSegments[0]
+			keyName := idSegments[1]
+			if isDel {
+				s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " leaved"))
+				s.actManager.UnregisterRemoteAction(host)
+			} else {
+				s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " added"))
+				flbNum := ""
+				if strings.Contains(val, "|") {
+					valNum := strings.Split(val, "|")
+					val = valNum[0]
+					flbNum = valNum[1]
+				}
+				s.actManager.RegisterRemoteAction(codec.Action{
+					Id:   codec.ActionId(actionId),
+					Name: val,
+				}, host, flbNum)
+			}
+		})
+		if err1 != nil {
+			s.logger.Warn("refresh action failed, err=" + err1.Error())
+		}
+	})
 
 	// watch gateway
 	gwPrefix := s.watchGwRegInfo.Prefix() + "/"

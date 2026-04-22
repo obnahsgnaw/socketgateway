@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/gobwas/ws v1.2.1
 	github.com/gorilla/websocket v1.5.0
-	github.com/obnahsgnaw/application v0.17.15
+	github.com/obnahsgnaw/application v0.17.25
 	github.com/obnahsgnaw/goutils v0.6.0
 	github.com/obnahsgnaw/http v0.2.10
 	github.com/obnahsgnaw/rpc v0.6.14
