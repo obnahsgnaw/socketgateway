@@ -1,8 +1,11 @@
 package doc
 
 import (
+	"context"
 	"embed"
+	"fmt"
 	"github.com/obnahsgnaw/application/pkg/utils"
+	"github.com/obnahsgnaw/application/service/regCenter"
 	"strings"
 	"sync"
 )
@@ -12,7 +15,10 @@ var Assets embed.FS
 
 type Manager struct {
 	sync.Mutex
-	docs map[module]*ModuleItem
+	docs  map[module]*ModuleItem
+	rfFn  func()
+	debug bool
+	l     func(string)
 }
 
 type module string
@@ -116,9 +122,79 @@ func (m *Manager) GetKeyDocs(moduleName, keyName string) (docs []string) {
 func (m *Manager) GetRandKeyDoc(moduleName, keyName string) string {
 	list := m.GetKeyDocs(moduleName, keyName)
 	if len(list) == 0 {
-		return ""
+		if m.rfFn != nil {
+			m.debugMsg("===> gw doc manger trigger refresh FN")
+			m.rfFn()
+		} else {
+			m.debugMsg("===> gw doc manger no refresh FN")
+			return ""
+		}
+		list = m.GetKeyDocs(moduleName, keyName)
 	}
 	return list[utils.RandInt(len(list))]
+}
+
+func (m *Manager) Watch(register regCenter.Register, ctx context.Context, keyPrefix string, handler func(key string, val string, isDel bool) (attr string, moduleName string, keyName string, value string, public *bool), l func(string)) error {
+	m.rfFn = func() {
+		err := register.Fetch(ctx, keyPrefix, func(key1 string, val1 string, isDel1 bool) {
+			attr, moduleName, keyName, value, public := handler(key1, val1, isDel1)
+			if isDel1 {
+				if attr == "url" {
+					l(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
+					m.Remove(moduleName, keyName, value)
+				}
+			} else {
+				if attr == "url" {
+					l(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
+					m.Add(moduleName, keyName, "", value, nil)
+				}
+				if attr == "title" {
+					m.Add(moduleName, keyName, value, "", nil)
+				}
+				if attr == "public" {
+					m.Add(moduleName, keyName, "", "", public)
+				}
+			}
+		})
+		if err != nil {
+			l("doc manager refresh sub doc failed, err=" + err.Error())
+		}
+	}
+	m.debugMsg(fmt.Sprintf("====> Added action refresh FN: %v \n", m.rfFn != nil))
+	return register.Watch(ctx, keyPrefix, func(key1 string, val1 string, isDel1 bool) {
+		attr, moduleName, keyName, value, public := handler(key1, val1, isDel1)
+		if isDel1 {
+			if attr == "url" {
+				l(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
+				m.Remove(moduleName, keyName, value)
+			}
+		} else {
+			if attr == "url" {
+				l(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
+				m.Add(moduleName, keyName, "", value, nil)
+			}
+			if attr == "title" {
+				m.Add(moduleName, keyName, value, "", nil)
+			}
+			if attr == "public" {
+				m.Add(moduleName, keyName, "", "", public)
+			}
+		}
+	})
+}
+
+func (m *Manager) WithDebug() {
+	m.debug = true
+}
+
+func (m *Manager) debugMsg(s string) {
+	if m.debug {
+		if m.l != nil {
+			m.l(s)
+		} else {
+			fmt.Println(s)
+		}
+	}
 }
 
 func (m *Manager) GetModules(public bool) map[string]string {

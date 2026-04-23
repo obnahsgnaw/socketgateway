@@ -297,34 +297,25 @@ func (s *Server) Run(failedCb func(error)) {
 			failedCb(errors.New("watch key prefix is empty"))
 			return
 		}
-		err := s.app.Register().Watch(s.app.Context(), prefix, func(key string, val string, isDel bool) {
+		if s.app.Debugger().Debug() {
+			s.docServer.Manager.WithDebug()
+		}
+		err := s.docServer.Manager.Watch(s.app.Register(), s.app.Context(), prefix, func(key string, val string, isDel bool) (string, string, string, string, *bool) {
 			segments := strings.Split(key, "/")
 			id := segments[len(segments)-3]
 			idSegments := strings.Split(id, "-")
 			moduleName := idSegments[0]
 			keyName := idSegments[1]
 			attr := segments[len(segments)-1]
-			if isDel {
-				if attr == "url" {
-					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] leaved"))
-					s.docServer.Manager.Remove(moduleName, keyName, val)
-				}
-			} else {
-				if attr == "url" {
-					s.logger.Debug(utils.ToStr("sub doc[", moduleName, ":", keyName, "] joined"))
-					s.docServer.Manager.Add(moduleName, keyName, "", val, nil)
-				}
-				if attr == "title" {
-					s.docServer.Manager.Add(moduleName, keyName, val, "", nil)
-				}
-				if attr == "public" {
-					var public bool
-					if val == "1" {
-						public = true
-					}
-					s.docServer.Manager.Add(moduleName, keyName, "", "", &public)
+			var public bool
+			if attr == "public" {
+				if val == "1" {
+					public = true
 				}
 			}
+			return attr, moduleName, keyName, val, &public
+		}, func(msg string) {
+			s.logger.Debug(msg)
 		})
 		if err != nil {
 			failedCb(err)
@@ -521,7 +512,10 @@ func (s *Server) watch(register regCenter.Register) error {
 	// watch handler
 	s.logger.Debug("handler watch start...")
 	handlerPrefix := s.watchHdlRegInfo.Prefix()
-	err := register.Watch(s.app.Context(), handlerPrefix, func(key string, val string, isDel bool) {
+	if s.app.Debugger().Debug() {
+		s.actManager.WithDebug()
+	}
+	err := s.actManager.Watch(register, s.app.Context(), handlerPrefix, func(key string, val string, isDel bool) (string, string, int, string, string, string) {
 		segments := strings.Split(key, "/")
 		id := segments[len(segments)-3]
 		host := segments[len(segments)-2]
@@ -530,73 +524,31 @@ func (s *Server) watch(register regCenter.Register) error {
 		idSegments := strings.Split(id, "-")
 		moduleName := idSegments[0]
 		keyName := idSegments[1]
-		if isDel {
-			s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " leaved"))
-			s.actManager.UnregisterRemoteAction(host)
-		} else {
-			s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " added"))
-			flbNum := ""
-			if strings.Contains(val, "|") {
-				valNum := strings.Split(val, "|")
-				val = valNum[0]
-				flbNum = valNum[1]
-			}
-			s.actManager.RegisterRemoteAction(codec.Action{
-				Id:   codec.ActionId(actionId),
-				Name: val,
-			}, host, flbNum)
+		flbNum := ""
+		if strings.Contains(val, "|") {
+			valNum := strings.Split(val, "|")
+			val = valNum[0]
+			flbNum = valNum[1]
 		}
+		return moduleName, keyName, actionId, host, val, flbNum
+	}, func(msg string) {
+		s.logger.Debug(msg)
 	})
 	if err != nil {
 		return err
 	}
-	s.actManager.Refresh(func() {
-		s.logger.Debug("triggering action refresh")
-		err1 := register.Fetch(s.app.Context(), handlerPrefix, func(key string, val string, isDel bool) {
-			segments := strings.Split(key, "/")
-			id := segments[len(segments)-3]
-			host := segments[len(segments)-2]
-			actionStr := segments[len(segments)-1]
-			actionId, _ := strconv.Atoi(actionStr)
-			idSegments := strings.Split(id, "-")
-			moduleName := idSegments[0]
-			keyName := idSegments[1]
-			if isDel {
-				s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " leaved"))
-				s.actManager.UnregisterRemoteAction(host)
-			} else {
-				s.logger.Debug(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " added"))
-				flbNum := ""
-				if strings.Contains(val, "|") {
-					valNum := strings.Split(val, "|")
-					val = valNum[0]
-					flbNum = valNum[1]
-				}
-				s.actManager.RegisterRemoteAction(codec.Action{
-					Id:   codec.ActionId(actionId),
-					Name: val,
-				}, host, flbNum)
-			}
-		})
-		if err1 != nil {
-			s.logger.Warn("refresh action failed, err=" + err1.Error())
-		}
-	})
 
 	// watch gateway
 	gwPrefix := s.watchGwRegInfo.Prefix() + "/"
-	return register.Watch(s.app.Context(), gwPrefix, func(key string, val string, isDel bool) {
+	return s.watchClient.Watch(register, s.app.Context(), gwPrefix, func(key string, val string, isDel bool) (rpcclient.Module, string) {
 		segments := strings.Split(key, "/")
 		host := segments[len(segments)-1]
 		if host != s.rpcServer.Host().String() {
-			if isDel {
-				s.logger.Debug(utils.ToStr("wss gateway [", host, "] leaved"))
-				s.watchClient.Rm("gateway", host)
-			} else {
-				s.logger.Debug(utils.ToStr("wss gateway [", host, "] added"))
-				s.watchClient.Add("gateway", host)
-			}
+			return "gateway", host
 		}
+		return "", ""
+	}, func(msg string) {
+		s.logger.Debug(utils.ToStr("gateway: " + msg))
 	})
 }
 

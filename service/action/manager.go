@@ -1,15 +1,19 @@
 package action
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"github.com/obnahsgnaw/application/pkg/url"
 	"github.com/obnahsgnaw/application/pkg/utils"
+	"github.com/obnahsgnaw/application/service/regCenter"
 	handlerv1 "github.com/obnahsgnaw/socketapi/gen/handler/v1"
 	"github.com/obnahsgnaw/socketgateway/pkg/socket"
 	"github.com/obnahsgnaw/socketgateway/service/eventhandler/connutil"
 	"github.com/obnahsgnaw/socketutil/codec"
 	"github.com/panjf2000/gnet/v2/pkg/pool/goroutine"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -24,6 +28,8 @@ type Manager struct {
 	remoteHandler       RemoteHandler
 	gateway             url.Host
 	rfFn                func()
+	debug               bool
+	l                   func(string)
 }
 
 type actionHandler struct {
@@ -189,16 +195,16 @@ func (m *Manager) getFlbServers(actionId codec.ActionId) (list map[string]string
 	return
 }
 
-func (m *Manager) Refresh(fn func()) {
-	m.rfFn = fn
-}
-
 func (m *Manager) getRandServer(actionId codec.ActionId) string {
 	list := m.getServers(actionId)
 
 	if len(list) == 0 {
 		if m.rfFn != nil {
+			m.debugMsg("===> Action manger trigger refresh FN")
 			m.rfFn()
+		} else {
+			m.debugMsg("===> Action manger no refresh FN")
+			return ""
 		}
 		list = m.getServers(actionId)
 		if len(list) == 0 {
@@ -206,6 +212,20 @@ func (m *Manager) getRandServer(actionId codec.ActionId) string {
 		}
 	}
 	return list[utils.RandInt(len(list))]
+}
+
+func (m *Manager) WithDebug() {
+	m.debug = true
+}
+
+func (m *Manager) debugMsg(s string) {
+	if m.debug {
+		if m.l != nil {
+			m.l(s)
+		} else {
+			fmt.Println(s)
+		}
+	}
 }
 
 func (m *Manager) getFlbServer(fd int, actionId codec.ActionId) string {
@@ -392,4 +412,39 @@ func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string
 	respData = response.Data
 	subActions = response.SubActions
 	return
+}
+
+func (m *Manager) Watch(register regCenter.Register, ctx context.Context, keyPrefix string, handler func(key string, val string, isDel bool) (moduleName string, keyName string, actionId int, host string, value string, flbNum string), l func(string)) error {
+	m.rfFn = func() {
+		err := register.Fetch(ctx, keyPrefix, func(key1 string, val1 string, isDel1 bool) {
+			moduleName, keyName, actionId, host, value, flbNum := handler(key1, val1, isDel1)
+			if isDel1 {
+				l(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " leaved"))
+				m.UnregisterRemoteAction(host)
+			} else {
+				l(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " added"))
+				m.RegisterRemoteAction(codec.Action{
+					Id:   codec.ActionId(actionId),
+					Name: value,
+				}, host, flbNum)
+			}
+		})
+		if err != nil {
+			l("action manager refresh failed, err=" + err.Error())
+		}
+	}
+	m.debugMsg(fmt.Sprintf("====> Added action refresh FN: %v \n", m.rfFn != nil))
+	return register.Watch(ctx, keyPrefix, func(key1 string, val1 string, isDel1 bool) {
+		moduleName, keyName, actionId, host, value, flbNum := handler(key1, val1, isDel1)
+		if isDel1 {
+			l(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " leaved"))
+			m.UnregisterRemoteAction(host)
+		} else {
+			l(utils.ToStr("action [", moduleName, ":", keyName, "]", strconv.Itoa(actionId), " added"))
+			m.RegisterRemoteAction(codec.Action{
+				Id:   codec.ActionId(actionId),
+				Name: value,
+			}, host, flbNum)
+		}
+	})
 }
