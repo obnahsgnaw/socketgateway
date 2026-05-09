@@ -396,10 +396,10 @@ func (m *Manager) Raw(c socket.Conn, rqId string, b codec.DataBuilder, tp string
 				respData, subActions1, err = m.Raw(c, rqId, b, tp, rawByte, uint32(respAction.Id))
 				subActions = append(subActions, subActions1...)
 			}
-		} else {
-			// raw out
-			respData = response.Data
 		}
+		// raw out
+		respData = response.Data
+
 		return
 	}
 	// otherwise to handle the output

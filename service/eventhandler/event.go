@@ -264,7 +264,7 @@ func (e *Event) OnShutdown(s *socket.Server) {
 func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 	if c.Context().Authentication().Protocol != "" {
 		e.log(c, rqId, "package for raw protocol:"+c.Context().Authentication().Protocol, zapcore.InfoLevel)
-		decryptedData, decErr := e.decrypt(c, packedPkg)
+		decryptedData, decErr := e.decrypt(c, packedPkg) // TODO MQTT消息包油固定格式 需处理payload加密和解密 而不是全部加解密
 		if decErr != nil {
 			e.log(c, rqId, "decrypt data failed, err="+decErr.Error(), zapcore.WarnLevel)
 			return true
