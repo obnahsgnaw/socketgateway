@@ -6,6 +6,7 @@ import (
 	"crypto"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/obnahsgnaw/application/pkg/utils"
 	"github.com/obnahsgnaw/goutils/runtimeutil"
 	"github.com/obnahsgnaw/goutils/security/coder"
@@ -279,6 +280,7 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 					e.log(c, rqId, "raw output data encrypt failed"+err.Error(), zapcore.ErrorLevel)
 				} else {
 					if err1 := e.write(c, encryptedDaa); err1 != nil {
+						fmt.Printf("===> RAW: %v \n", string(encryptedDaa))
 						e.log(c, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
 					}
 				}
@@ -310,6 +312,7 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 								e.log(subConn, rqId, "raw output data encrypt failed"+err.Error(), zapcore.ErrorLevel)
 							} else {
 								if err1 := e.write(subConn, encryptedData); err1 != nil {
+									fmt.Printf("===> RAW: %v \n", string(encryptedData))
 									e.log(subConn, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
 								}
 							}
@@ -362,6 +365,7 @@ func (e *Event) handleRaw(c socket.Conn, rqId string, packedPkg []byte) bool {
 												e.log(subConn1, rqId, "raw output data encrypt failed"+err.Error(), zapcore.ErrorLevel)
 											} else {
 												if err1 := e.write(subConn1, encryptedData); err1 != nil {
+													fmt.Printf("===> RAW: %v \n", string(encryptedData))
 													e.log(subConn1, rqId, "package raw dispatch write failed,err="+err1.Error(), zapcore.ErrorLevel)
 												}
 											}

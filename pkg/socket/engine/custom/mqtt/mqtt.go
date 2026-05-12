@@ -120,6 +120,7 @@ func (e *Engine) Run(ctx context.Context, s *socket.Server, eventHandler socket.
 						if err1 := proto.Unmarshal(wb, &msg); err1 != nil {
 							return err1
 						}
+						fmt.Printf("===> MQTT MSG: raw=%v, ummashal=%v,\n", str, &msg)
 						if msg.Topic == "" {
 							return errors.New("invalid mqtt topic")
 						}
